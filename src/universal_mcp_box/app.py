@@ -1357,7 +1357,7 @@ class BoxApp(APIApplication):
         any specific fields.
 
         Tags:
-            Folders
+            Folders, important
         """
         if folder_id is None:
             raise ValueError("Missing required parameter 'folder_id'")
@@ -1387,7 +1387,7 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a folder object when the folder has been restored.
 
         Tags:
-            Trashed folders
+            Trashed folders, important
         """
         if folder_id is None:
             raise ValueError("Missing required parameter 'folder_id'")
@@ -1471,7 +1471,7 @@ class BoxApp(APIApplication):
         take minutes or hours to return.
 
         Tags:
-            Folders
+            Folders, important
         """
         if folder_id is None:
             raise ValueError("Missing required parameter 'folder_id'")
@@ -1583,7 +1583,7 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a collection of files, folders, and web links contained in a folder.
 
         Tags:
-            Folders
+            Folders, important
         """
         if folder_id is None:
             raise ValueError("Missing required parameter 'folder_id'")
@@ -1628,7 +1628,7 @@ class BoxApp(APIApplication):
         any specific fields.
 
         Tags:
-            Folders
+            Folders, important
         """
         request_body = {
             'name': name,
