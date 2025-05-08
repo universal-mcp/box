@@ -4,7 +4,7 @@ from universal_mcp.integrations import Integration
 
 class BoxApp(APIApplication):
     def __init__(self, integration: Integration = None, **kwargs) -> None:
-        super().__init__(name='boxapp', integration=integration, **kwargs)
+        super().__init__(name='box', integration=integration, **kwargs)
         self.base_url = "https://api.box.com/2.0"
 
     def get_authorize(self, response_type, client_id, redirect_uri=None, state=None, scope=None) -> Any:
