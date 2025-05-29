@@ -44,7 +44,7 @@ class BoxApp(APIApplication):
             JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
-            Authorization
+            Authorization, important
         """
         url = f"{self.base_url}/authorize"
         query_params = {k: v for k, v in [('response_type', response_type), ('client_id', client_id), ('redirect_uri', redirect_uri), ('state', state), ('scope', scope)] if v is not None}
@@ -6159,7 +6159,7 @@ class BoxApp(APIApplication):
             JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
-            Users
+            Users, important
         """
         url = f"{self.base_url}/users"
         query_params = {k: v for k, v in [('filter_term', filter_term), ('user_type', user_type), ('external_app_user_id', external_app_user_id), ('fields', fields), ('offset', offset), ('limit', limit), ('usemarker', usemarker), ('marker', marker)] if v is not None}
@@ -11497,7 +11497,7 @@ class BoxApp(APIApplication):
             JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
-            AI Studio
+            AI Studio, important
         """
         url = f"{self.base_url}/ai_agents"
         query_params = {k: v for k, v in [('mode', mode), ('fields', fields), ('agent_state', agent_state), ('include_box_default', include_box_default), ('marker', marker), ('limit', limit)] if v is not None}
