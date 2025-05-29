@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional, List
 from universal_mcp.applications import APIApplication
 from universal_mcp.integrations import Integration
 
@@ -7,9 +7,9 @@ class BoxApp(APIApplication):
         super().__init__(name='box', integration=integration, **kwargs)
         self.base_url = "https://api.box.com/2.0"
 
-    def get_authorize(self, response_type, client_id, redirect_uri=None, state=None, scope=None) -> Any:
+    def get_authorize(self, response_type: str, client_id: str, redirect_uri: Optional[str] = None, state: Optional[str] = None, scope: Optional[str] = None) -> Any:
         """
-        Initiates an authorization flow using the GET method at the "/authorize" path, accepting parameters such as response type, client ID, redirect URI, state, and scope to manage user authentication and authorization.
+        Authorize user
 
         Args:
             response_type (string): The type of response we'd like to receive. Example: 'code'.
@@ -39,6 +39,10 @@ class BoxApp(APIApplication):
         Returns:
             Any: Does not return any data, but rather should be used in the browser.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Authorization
         """
@@ -46,22 +50,212 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('response_type', response_type), ('client_id', client_id), ('redirect_uri', redirect_uri), ('state', state), ('scope', scope)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-
-    def get_files_id(self, file_id, fields=None) -> dict[str, Any]:
+    def post_oauth_token(self, grant_type: Optional[str] = None, client_id: Optional[str] = None, client_secret: Optional[str] = None, code: Optional[str] = None, refresh_token: Optional[str] = None, assertion: Optional[str] = None, subject_token: Optional[str] = None, subject_token_type: Optional[str] = None, actor_token: Optional[str] = None, actor_token_type: Optional[str] = None, scope: Optional[str] = None, resource: Optional[str] = None, box_subject_type: Optional[str] = None, box_subject_id: Optional[str] = None, box_shared_link: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a file by its ID at the specified path "/files/{file_id}" using the GET method, allowing optional filtering by fields and headers for conditional requests.
+        Request access token
+
+        Args:
+            grant_type (string): The type of request being made, either using a client-side obtained
+        authorization code, a refresh token, a JWT assertion, client credentials
+        grant or another access token for the purpose of downscoping a token. Example: 'authorization_code'.
+            client_id (string): The Client ID of the application requesting an access token.
+
+        Used in combination with `authorization_code`, `client_credentials`, or
+        `urn:ietf:params:oauth:grant-type:jwt-bearer` as the `grant_type`. Example: 'ly1nj6n11vionaie65emwzk575hnnmrk'.
+            client_secret (string): The client secret of the application requesting an access token.
+
+        Used in combination with `authorization_code`, `client_credentials`, or
+        `urn:ietf:params:oauth:grant-type:jwt-bearer` as the `grant_type`. Example: 'hOzsTeFlT6ko0dme22uGbQal04SBPYc1'.
+            code (string): The client-side authorization code passed to your application by
+        Box in the browser redirect after the user has successfully
+        granted your application permission to make API calls on their
+        behalf.
+
+        Used in combination with `authorization_code` as the `grant_type`. Example: 'n22JPxrh18m4Y0wIZPIqYZK7VRrsMTWW'.
+            refresh_token (string): A refresh token used to get a new access token with.
+
+        Used in combination with `refresh_token` as the `grant_type`. Example: 'c3FIOG9vSGV4VHo4QzAyg5T1JvNnJoZ3ExaVNyQWw6WjRsanRKZG5lQk9qUE1BVQ'.
+            assertion (string): A JWT assertion for which to request a new access token.
+
+        Used in combination with `urn:ietf:params:oauth:grant-type:jwt-bearer`
+        as the `grant_type`. Example: 'xxxxx.yyyyy.zzzzz'.
+            subject_token (string): The token to exchange for a downscoped token. This can be a regular
+        access token, a JWT assertion, or an app token.
+
+        Used in combination with `urn:ietf:params:oauth:grant-type:token-exchange`
+        as the `grant_type`. Example: 'c3FIOG9vSGV4VHo4QzAyg5T1JvNnJoZ3ExaVNyQWw6WjRsanRKZG5lQk9qUE1BVQ'.
+            subject_token_type (string): The type of `subject_token` passed in.
+
+        Used in combination with `urn:ietf:params:oauth:grant-type:token-exchange`
+        as the `grant_type`. Example: 'urn:ietf:params:oauth:token-type:access_token'.
+            actor_token (string): The token used to create an annotator token.
+        This is a JWT assertion.
+
+        Used in combination with `urn:ietf:params:oauth:grant-type:token-exchange`
+        as the `grant_type`. Example: 'c3FIOG9vSGV4VHo4QzAyg5T1JvNnJoZ3ExaVNyQWw6WjRsanRKZG5lQk9qUE1BVQ'.
+            actor_token_type (string): The type of `actor_token` passed in.
+
+        Used in combination with `urn:ietf:params:oauth:grant-type:token-exchange`
+        as the `grant_type`. Example: 'urn:ietf:params:oauth:token-type:id_token'.
+            scope (string): The space-delimited list of scopes that you want apply to the
+        new access token.
+
+        The `subject_token` will need to have all of these scopes or
+        the call will error with **401 Unauthorized**. Example: 'item_upload item_preview base_explorer'.
+            resource (string): Full URL for the file that the token should be generated for. Example: 'https://api.box.com/2.0/files/123456'.
+            box_subject_type (string): Used in combination with `client_credentials` as the `grant_type`. Example: 'enterprise'.
+            box_subject_id (string): Used in combination with `client_credentials` as the `grant_type`.
+        Value is determined by `box_subject_type`. If `user` use user ID and if
+        `enterprise` use enterprise ID. Example: '123456789'.
+            box_shared_link (string): Full URL of the shared link on the file or folder
+        that the token should be generated for. Example: 'https://cloud.box.com/s/123456'.
+
+        Returns:
+            dict[str, Any]: Returns a new Access Token that can be used to make authenticated
+        API calls by passing along the token in a authorization header as
+        follows `Authorization: Bearer <Token>`.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Authorization
+        """
+        request_body_data = None
+        request_body_data = {
+            'grant_type': grant_type,
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'code': code,
+            'refresh_token': refresh_token,
+            'assertion': assertion,
+            'subject_token': subject_token,
+            'subject_token_type': subject_token_type,
+            'actor_token': actor_token,
+            'actor_token_type': actor_token_type,
+            'scope': scope,
+            'resource': resource,
+            'box_subject_type': box_subject_type,
+            'box_subject_id': box_subject_id,
+            'box_shared_link': box_shared_link,
+        }
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
+        url = f"{self.base_url}/oauth2/token"
+        query_params = {}
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/x-www-form-urlencoded')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def post_oauth_token_refresh(self, grant_type: Optional[str] = None, client_id: Optional[str] = None, client_secret: Optional[str] = None, refresh_token: Optional[str] = None) -> dict[str, Any]:
+        """
+        Refresh access token
+
+        Args:
+            grant_type (string): The type of request being made, in this case a refresh request. Example: 'refresh_token'.
+            client_id (string): The client ID of the application requesting to refresh the token. Example: 'ly1nj6n11vionaie65emwzk575hnnmrk'.
+            client_secret (string): The client secret of the application requesting to refresh the token. Example: 'hOzsTeFlT6ko0dme22uGbQal04SBPYc1'.
+            refresh_token (string): The refresh token to refresh. Example: 'c3FIOG9vSGV4VHo4QzAyg5T1JvNnJoZ3ExaVNyQWw6WjRsanRKZG5lQk9qUE1BVQ'.
+
+        Returns:
+            dict[str, Any]: Returns a new Access Token that can be used to make authenticated
+        API calls by passing along the token in a authorization header as
+        follows `Authorization: Bearer <Token>`.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Authorization
+        """
+        request_body_data = None
+        request_body_data = {
+            'grant_type': grant_type,
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'refresh_token': refresh_token,
+        }
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
+        url = f"{self.base_url}/oauth2/token#refresh"
+        query_params = {}
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/x-www-form-urlencoded')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def post_oauth_revoke(self, client_id: Optional[str] = None, client_secret: Optional[str] = None, token: Optional[str] = None) -> Any:
+        """
+        Revoke access token
+
+        Args:
+            client_id (string): The Client ID of the application requesting to revoke the
+        access token. Example: 'ly1nj6n11vionaie65emwzk575hnnmrk'.
+            client_secret (string): The client secret of the application requesting to revoke
+        an access token. Example: 'hOzsTeFlT6ko0dme22uGbQal04SBPYc1'.
+            token (string): The access token to revoke. Example: 'n22JPxrh18m4Y0wIZPIqYZK7VRrsMTWW'.
+
+        Returns:
+            Any: Returns an empty response when the token was successfully revoked.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Authorization
+        """
+        request_body_data = None
+        request_body_data = {
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'token': token,
+        }
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
+        url = f"{self.base_url}/oauth2/revoke"
+        query_params = {}
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/x-www-form-urlencoded')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def get_files_id(self, file_id: str, fields: Optional[List[str]] = None) -> dict[str, Any]:
+        """
+        Get file information
 
         Args:
             file_id (string): file_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
-        to the fields requested. Additionally this field can be used to query any metadata
+        to the fields requested.
+
+        Additionally this field can be used to query any metadata
         applied to the file by specifying the `metadata` field as well
         as the scope and key of the template to retrieve, for example
         `?fields=metadata.enterprise_12345.contractTemplate`. Example: "['id', 'type', 'name']".
@@ -73,26 +267,37 @@ class BoxApp(APIApplication):
         [fields](#param-fields) query parameter to explicitly request
         any specific fields.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Files
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_files_id(self, file_id, fields=None, name=None, parent=None) -> dict[str, Any]:
+    def post_files_id(self, file_id: str, fields: Optional[List[str]] = None, name: Optional[str] = None, parent: Optional[Any] = None) -> dict[str, Any]:
         """
-        Uploads or updates a file with the specified file_id and returns a status response, allowing optional field selection via a query parameter.
+        Restore file
 
         Args:
             file_id (string): file_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -103,37 +308,52 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a file object when the file has been restored.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Trashed files
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'file_id'.")
+        request_body_data = None
+        request_body_data = {
             'name': name,
             'parent': parent,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/{file_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_files_id(self, file_id, fields=None, name=None, description=None, parent=None, shared_link=None, lock=None, disposition_at=None, permissions=None, collections=None, tags=None) -> dict[str, Any]:
+    def put_files_id(self, file_id: str, fields: Optional[List[str]] = None, name: Optional[str] = None, description: Optional[str] = None, parent: Optional[Any] = None, shared_link: Optional[Any] = None, lock: Optional[dict[str, Any]] = None, disposition_at: Optional[str] = None, permissions: Optional[dict[str, Any]] = None, collections: Optional[List[dict[str, Any]]] = None, tags: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Updates or replaces the file specified by file_id using the provided data and returns the result.
+        Update file
 
         Args:
             file_id (string): file_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
             name (string): An optional different name for the file. This can be used to
-        rename the file. Example: 'NewFile.txt'.
+        rename the file.
+
+        File names must be unique within their parent folder. The name check is case-insensitive, so a file 
+        named `New File` cannot be created in a parent folder that already contains a folder named `new file`. Example: 'NewFile.txt'.
             description (string): The description for a file. This can be seen in the right-hand sidebar panel
         when viewing a file in the Box web app. Additionally, this index is used in
         the search index of the file, allowing users to find the file by the content
@@ -175,12 +395,17 @@ class BoxApp(APIApplication):
         [fields](#param-fields) query parameter to explicitly request
         any specific fields.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Files
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'file_id'.")
+        request_body_data = None
+        request_body_data = {
             'name': name,
             'description': description,
             'parent': parent,
@@ -191,16 +416,21 @@ class BoxApp(APIApplication):
             'collections': collections,
             'tags': tags,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/{file_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_files_id(self, file_id) -> Any:
+    def delete_files_id(self, file_id: str) -> Any:
         """
-        Deletes a file specified by its ID using the "DELETE" method at the "/files/{file_id}" path, returning success or error status codes based on the operation's outcome.
+        Delete file
 
         Args:
             file_id (string): file_id
@@ -209,26 +439,37 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the file has been successfully
         deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Files
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_app_item_associations(self, file_id, limit=None, marker=None, application_type=None) -> dict[str, Any]:
+    def list_file_associations(self, file_id: str, limit: Optional[int] = None, marker: Optional[str] = None, application_type: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves the list of application item associations linked to a specific file, allowing filtering by application type and pagination via limit and marker parameters.
+        List file app item associations
 
         Args:
             file_id (string): file_id
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             application_type (string): If given, only return app items for this application type Example: 'hubs'.
 
         Returns:
@@ -236,20 +477,29 @@ class BoxApp(APIApplication):
         app items on this file, an empty collection will be returned.
         This list includes app items on ancestors of this File.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             App item associations
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/app_item_associations"
         query_params = {k: v for k, v in [('limit', limit), ('marker', marker), ('application_type', application_type)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_content(self, file_id, version=None, access_token=None) -> Any:
+    def get_files_id_content(self, file_id: str, version: Optional[str] = None, access_token: Optional[str] = None) -> Any:
         """
-        Retrieves the content of a file specified by its file ID, allowing for partial downloads via range headers and authentication through access tokens.
+        Download file
 
         Args:
             file_id (string): file_id
@@ -265,20 +515,100 @@ class BoxApp(APIApplication):
         For details, see
         the [download file guide](g://downloads/file#download-url).
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Downloads
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/content"
         query_params = {k: v for k, v in [('version', version), ('access_token', access_token)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def options_files_content(self, name=None, size=None, parent=None) -> dict[str, Any]:
+    def post_files_id_content(self, file_id: str, fields: Optional[List[str]] = None, attributes: Optional[dict[str, Any]] = None, file: Optional[bytes] = None) -> dict[str, Any]:
         """
-        Describes the communication options and supported operations available for the "/files/content" resource, including permitted HTTP methods and headers.
+        Upload file version
+
+        Args:
+            file_id (string): file_id
+            fields (array): A comma-separated list of attributes to include in the
+        response. This can be used to request fields that are
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
+        effect that none of the standard fields are returned in
+        the response unless explicitly specified, instead only
+        fields for the mini representation are returned, additional
+        to the fields requested. Example: "['id', 'type', 'name']".
+            attributes (object): The additional attributes of the file being uploaded. Mainly the
+        name and the parent folder. These attributes are part of the multi
+        part request body and are in JSON format.
+
+        <Message warning>
+
+          The `attributes` part of the body must come **before** the
+          `file` part. Requests that do not follow this format when
+          uploading the file will receive a HTTP `400` error with a
+          `metadata_after_file_contents` error code.
+
+        </Message>
+            file (file (e.g., open('path/to/file', 'rb'))): The content of the file to upload to Box.
+
+        <Message warning>
+
+          The `attributes` part of the body must come **before** the
+          `file` part. Requests that do not follow this format when
+          uploading the file will receive a HTTP `400` error with a
+          `metadata_after_file_contents` error code.
+
+        </Message>
+
+        Returns:
+            dict[str, Any]: Returns the new file object in a list.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Uploads
+        """
+        if file_id is None:
+            raise ValueError("Missing required parameter 'file_id'.")
+        request_body_data = None
+        files_data = None
+        request_body_data = {}
+        files_data = {}
+        if attributes is not None:
+            request_body_data['attributes'] = attributes
+        if file is not None:
+            files_data['file'] = file
+        files_data = {k: v for k, v in files_data.items() if v is not None}
+        if not files_data: files_data = None
+        url = f"{self.base_url}/files/{file_id}/content"
+        query_params = {k: v for k, v in [('fields', fields)] if v is not None}
+        response = self._post(url, data=request_body_data, files=files_data, params=query_params, content_type='multipart/form-data')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def options_files_content(self, name: Optional[str] = None, size: Optional[int] = None, parent: Optional[Any] = None) -> dict[str, Any]:
+        """
+        Preflight check before upload
 
         Args:
             name (string): The name for the file Example: 'File.mp4'.
@@ -289,25 +619,102 @@ class BoxApp(APIApplication):
             dict[str, Any]: If the check passed, the response will include a session URL that
         can be used to upload the file to.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Files
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'name': name,
             'size': size,
             'parent': parent,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/content"
         query_params = {}
-        response = self._options(url, data=request_body, params=query_params)
+        response = self._options(url, data=request_body_data, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-
-    def post_files_upload_sessions(self, folder_id=None, file_size=None, file_name=None) -> dict[str, Any]:
+    def post_files_content(self, fields: Optional[List[str]] = None, attributes: Optional[dict[str, Any]] = None, file: Optional[bytes] = None) -> dict[str, Any]:
         """
-        Creates a new upload session for uploading large files in chunks, enabling reliable partial uploads and resumable file transfer.
+        Upload file
+
+        Args:
+            fields (array): A comma-separated list of attributes to include in the
+        response. This can be used to request fields that are
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
+        effect that none of the standard fields are returned in
+        the response unless explicitly specified, instead only
+        fields for the mini representation are returned, additional
+        to the fields requested. Example: "['id', 'type', 'name']".
+            attributes (object): The additional attributes of the file being uploaded. Mainly the
+        name and the parent folder. These attributes are part of the multi
+        part request body and are in JSON format.
+
+        <Message warning>
+
+          The `attributes` part of the body must come **before** the
+          `file` part. Requests that do not follow this format when
+          uploading the file will receive a HTTP `400` error with a
+          `metadata_after_file_contents` error code.
+
+        </Message>
+            file (file (e.g., open('path/to/file', 'rb'))): The content of the file to upload to Box.
+
+        <Message warning>
+
+          The `attributes` part of the body must come **before** the
+          `file` part. Requests that do not follow this format when
+          uploading the file will receive a HTTP `400` error with a
+          `metadata_after_file_contents` error code.
+
+        </Message>
+
+        Returns:
+            dict[str, Any]: Returns the new file object in a list.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Uploads
+        """
+        request_body_data = None
+        files_data = None
+        request_body_data = {}
+        files_data = {}
+        if attributes is not None:
+            request_body_data['attributes'] = attributes
+        if file is not None:
+            files_data['file'] = file
+        files_data = {k: v for k, v in files_data.items() if v is not None}
+        if not files_data: files_data = None
+        url = f"{self.base_url}/files/content"
+        query_params = {k: v for k, v in [('fields', fields)] if v is not None}
+        response = self._post(url, data=request_body_data, files=files_data, params=query_params, content_type='multipart/form-data')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def post_files_upload_sessions(self, folder_id: Optional[str] = None, file_size: Optional[int] = None, file_name: Optional[str] = None) -> dict[str, Any]:
+        """
+        Create upload session
 
         Args:
             folder_id (string): The ID of the folder to upload the new file to. Example: '0'.
@@ -317,24 +724,34 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new upload session.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Uploads (Chunked)
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'folder_id': folder_id,
             'file_size': file_size,
             'file_name': file_name,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/upload_sessions"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_files_id_upload_sessions(self, file_id, file_size=None, file_name=None) -> dict[str, Any]:
+    def post_files_id_upload_sessions(self, file_id: str, file_size: Optional[int] = None, file_name: Optional[str] = None) -> dict[str, Any]:
         """
-        Creates an upload session for a file identified by the `file_id`, allowing for chunked file uploads.
+        Create upload session for existing file
 
         Args:
             file_id (string): file_id
@@ -344,25 +761,35 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new upload session.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Uploads (Chunked)
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'file_id'.")
+        request_body_data = None
+        request_body_data = {
             'file_size': file_size,
             'file_name': file_name,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/{file_id}/upload_sessions"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_upload_sessions_id(self, upload_session_id) -> dict[str, Any]:
+    def get_files_upload_sessions_id(self, upload_session_id: str) -> dict[str, Any]:
         """
-        Retrieves information about a specific file upload session using the provided `upload_session_id`.
+        Get upload session
 
         Args:
             upload_session_id (string): upload_session_id
@@ -370,21 +797,62 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns an upload session object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Uploads (Chunked)
         """
         if upload_session_id is None:
-            raise ValueError("Missing required parameter 'upload_session_id'")
+            raise ValueError("Missing required parameter 'upload_session_id'.")
         url = f"{self.base_url}/files/upload_sessions/{upload_session_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-
-    def delete_files_upload_sessions_id(self, upload_session_id) -> Any:
+    def put_files_upload_sessions_id(self, upload_session_id: str, body_content: Optional[bytes] = None) -> dict[str, Any]:
         """
-        Deletes an upload session by its ID, discarding all uploaded data, using the DELETE method on the path "/files/upload_sessions/{upload_session_id}".
+        Upload part of file
+
+        Args:
+            upload_session_id (string): upload_session_id
+            body_content (bytes | None): Raw binary content for the request body.
+
+        Returns:
+            dict[str, Any]: Chunk has been uploaded successfully.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Uploads (Chunked)
+        """
+        if upload_session_id is None:
+            raise ValueError("Missing required parameter 'upload_session_id'.")
+        request_body_data = None
+        request_body_data = body_content
+        url = f"{self.base_url}/files/upload_sessions/{upload_session_id}"
+        query_params = {}
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/octet-stream')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def delete_upload_session_by_id(self, upload_session_id: str) -> Any:
+        """
+        Remove upload session
 
         Args:
             upload_session_id (string): upload_session_id
@@ -393,24 +861,35 @@ class BoxApp(APIApplication):
             Any: A blank response is returned if the session was
         successfully aborted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Uploads (Chunked)
         """
         if upload_session_id is None:
-            raise ValueError("Missing required parameter 'upload_session_id'")
+            raise ValueError("Missing required parameter 'upload_session_id'.")
         url = f"{self.base_url}/files/upload_sessions/{upload_session_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_upload_sessions_id_parts(self, upload_session_id, offset=None, limit=None) -> dict[str, Any]:
+    def get_upload_session_parts(self, upload_session_id: str, offset: Optional[int] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of uploaded parts for a specified upload session, optionally paginated by offset and limit.
+        List parts
 
         Args:
             upload_session_id (string): upload_session_id
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
@@ -418,20 +897,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a list of parts that have been uploaded.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Uploads (Chunked)
         """
         if upload_session_id is None:
-            raise ValueError("Missing required parameter 'upload_session_id'")
+            raise ValueError("Missing required parameter 'upload_session_id'.")
         url = f"{self.base_url}/files/upload_sessions/{upload_session_id}/parts"
         query_params = {k: v for k, v in [('offset', offset), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_files_upload_sessions_id_commit(self, upload_session_id, parts=None) -> dict[str, Any]:
+    def commit_upload_session(self, upload_session_id: str, parts: Optional[List[dict[str, Any]]] = None) -> dict[str, Any]:
         """
-        Commits a file upload session by finalizing and assembling all uploaded parts, completing the file upload process.
+        Commit upload session
 
         Args:
             upload_session_id (string): upload_session_id
@@ -440,30 +928,42 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the file object in a list.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Uploads (Chunked)
         """
         if upload_session_id is None:
-            raise ValueError("Missing required parameter 'upload_session_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'upload_session_id'.")
+        request_body_data = None
+        request_body_data = {
             'parts': parts,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/upload_sessions/{upload_session_id}/commit"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_files_id_copy(self, file_id, fields=None, name=None, version=None, parent=None) -> dict[str, Any]:
+    def post_files_id_copy(self, file_id: str, fields: Optional[List[str]] = None, name: Optional[str] = None, version: Optional[str] = None, parent: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Copies a specified file to a new location and returns the details of the copied file.
+        Copy file
 
         Args:
             file_id (string): file_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -485,26 +985,36 @@ class BoxApp(APIApplication):
         [fields](#param-fields) query parameter to explicitly request
         any specific fields.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Files
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'file_id'.")
+        request_body_data = None
+        request_body_data = {
             'name': name,
             'version': version,
             'parent': parent,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/{file_id}/copy"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_thumbnail_id(self, file_id, extension, min_height=None, min_width=None, max_height=None, max_width=None) -> Any:
+    def get_files_id_thumbnail_id(self, file_id: str, extension: str, min_height: Optional[int] = None, min_width: Optional[int] = None, max_height: Optional[int] = None, max_width: Optional[int] = None) -> Any:
         """
-        Retrieves a thumbnail image of a file specified by its ID, allowing for optional query parameters to set minimum and maximum dimensions, and returns the image in a specified extension.
+        Get file thumbnail
 
         Args:
             file_id (string): file_id
@@ -518,35 +1028,48 @@ class BoxApp(APIApplication):
             Any: When a thumbnail can be created the thumbnail data will be
         returned in the body of the response.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Files
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         if extension is None:
-            raise ValueError("Missing required parameter 'extension'")
+            raise ValueError("Missing required parameter 'extension'.")
         url = f"{self.base_url}/files/{file_id}/thumbnail.{extension}"
         query_params = {k: v for k, v in [('min_height', min_height), ('min_width', min_width), ('max_height', max_height), ('max_width', max_width)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_collaborations(self, file_id, fields=None, limit=None, marker=None) -> dict[str, Any]:
+    def get_files_id_collaborations(self, file_id: str, fields: Optional[List[str]] = None, limit: Optional[int] = None, marker: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a list of collaborations for a specified file using the Box API, allowing filtering by fields, limiting results, and using a marker for pagination.
+        List file collaborations
 
         Args:
             file_id (string): file_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
 
         Returns:
             dict[str, Any]: Returns a collection of collaboration objects. If there are no
@@ -556,32 +1079,45 @@ class BoxApp(APIApplication):
         is set to `pending`, indicating invitations that have been sent but not
         yet accepted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Collaborations (List)
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/collaborations"
         query_params = {k: v for k, v in [('fields', fields), ('limit', limit), ('marker', marker)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_comments(self, file_id, fields=None, limit=None, offset=None) -> dict[str, Any]:
+    def get_files_id_comments(self, file_id: str, fields: Optional[List[str]] = None, limit: Optional[int] = None, offset: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of comments associated with a specific file, with options to filter, limit, and paginate the results.
+        List file comments
 
         Args:
             file_id (string): file_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
             limit (integer): The maximum number of items to return per page. Example: '1000'.
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
 
@@ -589,20 +1125,29 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a collection of comment objects. If there are no
         comments on this file an empty collection will be returned.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Comments
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/comments"
         query_params = {k: v for k, v in [('fields', fields), ('limit', limit), ('offset', offset)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_tasks(self, file_id) -> dict[str, Any]:
+    def get_files_id_tasks(self, file_id: str) -> dict[str, Any]:
         """
-        Retrieves a list of tasks associated with a specific file identified by the `{file_id}` using the "GET" method.
+        List tasks on file
 
         Args:
             file_id (string): file_id
@@ -613,26 +1158,37 @@ class BoxApp(APIApplication):
         If there are no tasks on this file an empty collection is returned
         instead.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Tasks
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/tasks"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_trash(self, file_id, fields=None) -> dict[str, Any]:
+    def get_files_id_trash(self, file_id: str, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves information about a file specified by its ID and moves it to the trash or provides details about its trash status using the GET method.
+        Get trashed file
 
         Args:
             file_id (string): file_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -643,20 +1199,29 @@ class BoxApp(APIApplication):
         including information about when the it
         was moved to the trash.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Trashed files
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/trash"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_files_id_trash(self, file_id) -> Any:
+    def delete_files_id_trash(self, file_id: str) -> Any:
         """
-        Permanently deletes the specified file from the trash, removing it completely from the system.
+        Permanently remove file
 
         Args:
             file_id (string): file_id
@@ -665,59 +1230,83 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the file was
         permanently deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Trashed files
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/trash"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_versions(self, file_id, fields=None, limit=None, offset=None) -> dict[str, Any]:
+    def get_files_id_versions(self, file_id: str, fields: Optional[List[str]] = None, limit: Optional[int] = None, offset: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a paginated list of versions for a specified file, allowing optional filtering and field selection.
+        List all file versions
 
         Args:
             file_id (string): file_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
             limit (integer): The maximum number of items to return per page. Example: '1000'.
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns an array of past versions for this file.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             File versions
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/versions"
         query_params = {k: v for k, v in [('fields', fields), ('limit', limit), ('offset', offset)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_versions_id(self, file_id, file_version_id, fields=None) -> dict[str, Any]:
+    def get_files_id_versions_id(self, file_id: str, file_version_id: str, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves the specified version of a file identified by `file_id` and `file_version_id`, allowing for optional filtering by specific fields.
+        Get file version
 
         Args:
             file_id (string): file_id
             file_version_id (string): file_version_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -730,22 +1319,31 @@ class BoxApp(APIApplication):
         [fields](#param-fields) query parameter to explicitly request
         any specific fields.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             File versions
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         if file_version_id is None:
-            raise ValueError("Missing required parameter 'file_version_id'")
+            raise ValueError("Missing required parameter 'file_version_id'.")
         url = f"{self.base_url}/files/{file_id}/versions/{file_version_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_files_id_versions_id(self, file_id, file_version_id) -> Any:
+    def delete_files_id_versions_id(self, file_id: str, file_version_id: str) -> Any:
         """
-        Deletes a specific version of a file identified by its file ID and version ID, returning a successful status if the operation is completed.
+        Remove file version
 
         Args:
             file_id (string): file_id
@@ -755,22 +1353,31 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the file has been successfully
         deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             File versions
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         if file_version_id is None:
-            raise ValueError("Missing required parameter 'file_version_id'")
+            raise ValueError("Missing required parameter 'file_version_id'.")
         url = f"{self.base_url}/files/{file_id}/versions/{file_version_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_files_id_versions_id(self, file_id, file_version_id, trashed_at=None) -> dict[str, Any]:
+    def put_files_id_versions_id(self, file_id: str, file_version_id: str, trashed_at: Optional[str] = None) -> dict[str, Any]:
         """
-        Updates a specific version of a file using the "PUT" method, identified by the file ID and version ID in the path "/files/{file_id}/versions/{file_version_id}".
+        Restore file version
 
         Args:
             file_id (string): file_id
@@ -781,32 +1388,44 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a restored file version object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             File versions
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         if file_version_id is None:
-            raise ValueError("Missing required parameter 'file_version_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'file_version_id'.")
+        request_body_data = None
+        request_body_data = {
             'trashed_at': trashed_at,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/{file_id}/versions/{file_version_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_files_id_versions_current(self, file_id, fields=None, id=None, type=None) -> dict[str, Any]:
+    def post_files_id_versions_current(self, file_id: str, fields: Optional[List[str]] = None, id: Optional[str] = None, type: Optional[str] = None) -> dict[str, Any]:
         """
-        Creates a new version for the specified file, returning the details of the current version created.
+        Promote file version
 
         Args:
             file_id (string): file_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -817,25 +1436,35 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a newly created file version object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             File versions
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'file_id'.")
+        request_body_data = None
+        request_body_data = {
             'id': id,
             'type': type,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/{file_id}/versions/current"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_metadata(self, file_id) -> dict[str, Any]:
+    def get_files_id_metadata(self, file_id: str) -> dict[str, Any]:
         """
-        Retrieves the metadata for a specific file identified by its `file_id` using the "GET" method.
+        List metadata instances on file
 
         Args:
             file_id (string): file_id
@@ -846,20 +1475,29 @@ class BoxApp(APIApplication):
         This API does not support pagination and will therefore always return
         all of the metadata associated to the file.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Metadata instances (Files)
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/metadata"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_metadata_enterprise_security_classification_6_vmvochw_uwo(self, file_id) -> dict[str, Any]:
+    def get_file_security_classification_by_id(self, file_id: str) -> dict[str, Any]:
         """
-        Retrieves the security classification metadata instance for the specified file from the Box enterprise metadata template.
+        Get classification on file
 
         Args:
             file_id (string): file_id
@@ -870,20 +1508,29 @@ class BoxApp(APIApplication):
         field that lists all the classifications available to this
         enterprise.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Classifications on files
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/metadata/enterprise/securityClassification-6VMVochwUWo"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_files_id_metadata_enterprise_security_classification_6_vmvochw_uwo(self, file_id, Box__Security__Classification__Key=None) -> dict[str, Any]:
+    def update_file_security_classification(self, file_id: str, Box__Security__Classification__Key: Optional[str] = None) -> dict[str, Any]:
         """
-        Applies a security classification to a file using the Box API by creating an instance of the `enterprise.securityClassification-6VMVochwUWo` metadata template for the specified file ID.
+        Add classification to file
 
         Args:
             file_id (string): file_id
@@ -898,24 +1545,67 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the classification template instance
         that was applied to the file.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Classifications on files
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'file_id'.")
+        request_body_data = None
+        request_body_data = {
             'Box__Security__Classification__Key': Box__Security__Classification__Key,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/{file_id}/metadata/enterprise/securityClassification-6VMVochwUWo"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_files_id_metadata_enterprise_security_classification_6_vmvochw_uwo(self, file_id) -> Any:
+    def put_update_file_security_classification(self, file_id: str, items: Optional[List[dict[str, Any]]] = None) -> dict[str, Any]:
         """
-        Deletes any enterprise security classifications from a specified file using the file ID.
+        Update classification on file
+
+        Args:
+            file_id (string): file_id
+
+        Returns:
+            dict[str, Any]: Returns the updated classification metadata template instance.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Classifications on files
+        """
+        if file_id is None:
+            raise ValueError("Missing required parameter 'file_id'.")
+        request_body_data = None
+        # Using array parameter 'items' directly as request body
+        request_body_data = items
+        url = f"{self.base_url}/files/{file_id}/metadata/enterprise/securityClassification-6VMVochwUWo"
+        query_params = {}
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json-patch+json')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def delete_file_metadata(self, file_id: str) -> Any:
+        """
+        Remove classification from file
 
         Args:
             file_id (string): file_id
@@ -924,20 +1614,29 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the classification is
         successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Classifications on files
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/metadata/enterprise/securityClassification-6VMVochwUWo"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_metadata_id_id(self, file_id, scope, template_key) -> dict[str, Any]:
+    def get_files_id_metadata_id_id(self, file_id: str, scope: str, template_key: str) -> dict[str, Any]:
         """
-        Retrieves metadata for a specific file based on the file ID, scope, and template key using the GET method.
+        Get metadata instance on file
 
         Args:
             file_id (string): file_id
@@ -949,26 +1648,113 @@ class BoxApp(APIApplication):
         additional "key:value" pairs defined by the user or
         an application.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Metadata instances (Files)
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         if scope is None:
-            raise ValueError("Missing required parameter 'scope'")
+            raise ValueError("Missing required parameter 'scope'.")
         if template_key is None:
-            raise ValueError("Missing required parameter 'template_key'")
+            raise ValueError("Missing required parameter 'template_key'.")
         url = f"{self.base_url}/files/{file_id}/metadata/{scope}/{template_key}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-
-
-    def delete_files_id_metadata_id_id(self, file_id, scope, template_key) -> Any:
+    def post_files_id_metadata_id_id(self, file_id: str, scope: str, template_key: str, request_body: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Removes a metadata instance (identified by scope and template key) from the specified file, returning no content on success.
+        Create metadata instance on file
+
+        Args:
+            file_id (string): file_id
+            scope (string): scope
+            template_key (string): template_key
+            request_body (dict | None): Optional dictionary for an empty JSON request body (e.g., {}).
+
+        Returns:
+            dict[str, Any]: Returns the instance of the template that was applied to the file,
+        including the data that was applied to the template.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Metadata instances (Files)
+        """
+        if file_id is None:
+            raise ValueError("Missing required parameter 'file_id'.")
+        if scope is None:
+            raise ValueError("Missing required parameter 'scope'.")
+        if template_key is None:
+            raise ValueError("Missing required parameter 'template_key'.")
+        request_body_data = None
+        request_body_data = request_body if request_body is not None else {}
+        url = f"{self.base_url}/files/{file_id}/metadata/{scope}/{template_key}"
+        query_params = {}
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def put_files_id_metadata_id_id(self, file_id: str, scope: str, template_key: str, items: Optional[List[dict[str, Any]]] = None) -> dict[str, Any]:
+        """
+        Update metadata instance on file
+
+        Args:
+            file_id (string): file_id
+            scope (string): scope
+            template_key (string): template_key
+
+        Returns:
+            dict[str, Any]: Returns the updated metadata template instance, with the
+        custom template data included.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Metadata instances (Files)
+        """
+        if file_id is None:
+            raise ValueError("Missing required parameter 'file_id'.")
+        if scope is None:
+            raise ValueError("Missing required parameter 'scope'.")
+        if template_key is None:
+            raise ValueError("Missing required parameter 'template_key'.")
+        request_body_data = None
+        # Using array parameter 'items' directly as request body
+        request_body_data = items
+        url = f"{self.base_url}/files/{file_id}/metadata/{scope}/{template_key}"
+        query_params = {}
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json-patch+json')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def delete_files_id_metadata_id_id(self, file_id: str, scope: str, template_key: str) -> Any:
+        """
+        Remove metadata instance from file
 
         Args:
             file_id (string): file_id
@@ -979,24 +1765,33 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the metadata is
         successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Metadata instances (Files)
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         if scope is None:
-            raise ValueError("Missing required parameter 'scope'")
+            raise ValueError("Missing required parameter 'scope'.")
         if template_key is None:
-            raise ValueError("Missing required parameter 'template_key'")
+            raise ValueError("Missing required parameter 'template_key'.")
         url = f"{self.base_url}/files/{file_id}/metadata/{scope}/{template_key}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_metadata_global_box_skills_cards(self, file_id) -> dict[str, Any]:
+    def get_global_metadata(self, file_id: str) -> dict[str, Any]:
         """
-        Retrieves the Box Skill cards metadata (such as keywords, transcripts, timelines, or statuses) associated with the specified file using the global boxSkillsCards metadata template.
+        List Box Skill cards on file
 
         Args:
             file_id (string): file_id
@@ -1007,20 +1802,29 @@ class BoxApp(APIApplication):
         This API does not support pagination and will therefore always return
         all of the metadata associated to the file.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Skills
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/metadata/global/boxSkillsCards"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_files_id_metadata_global_box_skills_cards(self, file_id, cards=None) -> dict[str, Any]:
+    def post_file_metadata_global_box_skills_cards(self, file_id: str, cards: Optional[List[Any]] = None) -> dict[str, Any]:
         """
-        Adds Box Skill cards to a file by creating new metadata at the specified file ID, allowing you to store and display processed data like keywords, transcripts, or status updates.
+        Create Box Skill cards on file
 
         Args:
             file_id (string): file_id
@@ -1030,25 +1834,68 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the instance of the template that was applied to the file,
         including the data that was applied to the template.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Skills
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'file_id'.")
+        request_body_data = None
+        request_body_data = {
             'cards': cards,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/{file_id}/metadata/global/boxSkillsCards"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-
-    def delete_files_id_metadata_global_box_skills_cards(self, file_id) -> Any:
+    def update_file_metadata(self, file_id: str, items: Optional[List[dict[str, Any]]] = None) -> dict[str, Any]:
         """
-        Removes all Box Skills cards metadata from a specified file.
+        Update Box Skill cards on file
+
+        Args:
+            file_id (string): file_id
+
+        Returns:
+            dict[str, Any]: Returns the updated metadata template, with the
+        custom template data included.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Skills
+        """
+        if file_id is None:
+            raise ValueError("Missing required parameter 'file_id'.")
+        request_body_data = None
+        # Using array parameter 'items' directly as request body
+        request_body_data = items
+        url = f"{self.base_url}/files/{file_id}/metadata/global/boxSkillsCards"
+        query_params = {}
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json-patch+json')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def delete_file_global_box_skills_cards(self, file_id: str) -> Any:
+        """
+        Remove Box Skill cards from file
 
         Args:
             file_id (string): file_id
@@ -1057,20 +1904,29 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the cards are
         successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Skills
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/metadata/global/boxSkillsCards"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_watermark(self, file_id) -> dict[str, Any]:
+    def get_files_id_watermark(self, file_id: str) -> dict[str, Any]:
         """
-        Retrieves the watermark information for a file specified by its ID, returning details about the applied watermark.
+        Get watermark on file
 
         Args:
             file_id (string): file_id
@@ -1079,20 +1935,29 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns an object containing information about the
         watermark associated for to this file.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Watermarks (Files)
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/watermark"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_files_id_watermark(self, file_id, watermark=None) -> dict[str, Any]:
+    def put_files_id_watermark(self, file_id: str, watermark: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Applies a watermark to a file specified by its ID using the "PUT" method at the "/files/{file_id}/watermark" path.
+        Apply watermark to file
 
         Args:
             file_id (string): file_id
@@ -1102,24 +1967,34 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns an updated watermark if a watermark already
         existed on this file.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Watermarks (Files)
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'file_id'.")
+        request_body_data = None
+        request_body_data = {
             'watermark': watermark,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/{file_id}/watermark"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_files_id_watermark(self, file_id) -> Any:
+    def delete_files_id_watermark(self, file_id: str) -> Any:
         """
-        Removes the watermark from the specified file and returns an empty response if successful, or an error if no watermark exists[1].
+        Remove watermark from file
 
         Args:
             file_id (string): file_id
@@ -1127,20 +2002,29 @@ class BoxApp(APIApplication):
         Returns:
             Any: Removes the watermark and returns an empty response.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Watermarks (Files)
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}/watermark"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_file_requests_id(self, file_request_id) -> dict[str, Any]:
+    def get_file_requests_id(self, file_request_id: str) -> dict[str, Any]:
         """
-        Retrieves information about a specific file request by its ID using the "GET" method at the path "/file_requests/{file_request_id}".
+        Get file request
 
         Args:
             file_request_id (string): file_request_id
@@ -1148,20 +2032,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a file request object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             File requests
         """
         if file_request_id is None:
-            raise ValueError("Missing required parameter 'file_request_id'")
+            raise ValueError("Missing required parameter 'file_request_id'.")
         url = f"{self.base_url}/file_requests/{file_request_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_file_requests_id(self, file_request_id, title=None, description=None, status=None, is_email_required=None, is_description_required=None, expires_at=None) -> dict[str, Any]:
+    def put_file_requests_id(self, file_request_id: str, title: Optional[str] = None, description: Optional[str] = None, status: Optional[str] = None, is_email_required: Optional[bool] = None, is_description_required: Optional[bool] = None, expires_at: Optional[str] = None) -> dict[str, Any]:
         """
-        Updates a file request with the specified file_request_id using the PUT method, replacing the existing resource with new data if it exists, or creating a new one if it does not.
+        Update file request
 
         Args:
             file_request_id (string): file_request_id
@@ -1206,12 +2099,17 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the updated file request object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             File requests
         """
         if file_request_id is None:
-            raise ValueError("Missing required parameter 'file_request_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'file_request_id'.")
+        request_body_data = None
+        request_body_data = {
             'title': title,
             'description': description,
             'status': status,
@@ -1219,16 +2117,21 @@ class BoxApp(APIApplication):
             'is_description_required': is_description_required,
             'expires_at': expires_at,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/file_requests/{file_request_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_file_requests_id(self, file_request_id) -> Any:
+    def delete_file_requests_id(self, file_request_id: str) -> Any:
         """
-        Deletes a specific file request identified by its ID and returns a success response if the operation is completed.
+        Delete file request
 
         Args:
             file_request_id (string): file_request_id
@@ -1237,20 +2140,29 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the file request has been successfully
         deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             File requests
         """
         if file_request_id is None:
-            raise ValueError("Missing required parameter 'file_request_id'")
+            raise ValueError("Missing required parameter 'file_request_id'.")
         url = f"{self.base_url}/file_requests/{file_request_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_file_requests_id_copy(self, file_request_id, title=None, description=None, status=None, is_email_required=None, is_description_required=None, expires_at=None, folder=None) -> dict[str, Any]:
+    def post_file_requests_id_copy(self, file_request_id: str, title: Optional[str] = None, description: Optional[str] = None, status: Optional[str] = None, is_email_required: Optional[bool] = None, is_description_required: Optional[bool] = None, expires_at: Optional[str] = None, folder: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Copies an existing file request identified by its ID and applies it to a new folder, creating a duplicate of the original request.
+        Copy file request
 
         Args:
             file_request_id (string): file_request_id
@@ -1296,12 +2208,17 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns updated file request object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             File requests
         """
         if file_request_id is None:
-            raise ValueError("Missing required parameter 'file_request_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'file_request_id'.")
+        request_body_data = None
+        request_body_data = {
             'title': title,
             'description': description,
             'status': status,
@@ -1310,35 +2227,71 @@ class BoxApp(APIApplication):
             'expires_at': expires_at,
             'folder': folder,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/file_requests/{file_request_id}/copy"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_folders_id(self, folder_id, fields=None, sort=None, direction=None, offset=None, limit=None) -> dict[str, Any]:
+    def get_folders_id(self, folder_id: str, fields: Optional[List[str]] = None, sort: Optional[str] = None, direction: Optional[str] = None, offset: Optional[int] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves detailed information about a specified folder, including its first 100 entries, using the Box API's GET method at the path "/folders/{folder_id}".
+        Get folder information
 
         Args:
             folder_id (string): folder_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
-        to the fields requested. Additionally this field can be used to query any metadata
+        to the fields requested.
+
+        Additionally this field can be used to query any metadata
         applied to the file by specifying the `metadata` field as well
         as the scope and key of the template to retrieve, for example
         `?fields=metadata.enterprise_12345.contractTemplate`. Example: "['id', 'type', 'name']".
             sort (string): Defines the **second** attribute by which items
-        are sorted. The folder type affects the way the items
-        are sorted: * **Standard folder**: Items are always sorted by their `type` first, with folders listed before files, and files listed before web links. * **Root folder**: This parameter is not supported for marker-based pagination on the root folder (the folder with an `id` of `0`). * **Shared folder with parent path to the associated folder visible to the collaborator**: Items are always sorted by their `type` first, with folders listed before files, and files listed before web links. Example: 'id'.
+        are sorted.
+
+        The folder type affects the way the items
+        are sorted:
+
+          * **Standard folder**:
+          Items are always sorted by
+          their `type` first, with
+          folders listed before files,
+          and files listed
+          before web links.
+
+          * **Root folder**:
+          This parameter is not supported
+          for marker-based pagination
+          on the root folder
+
+          (the folder with an `id` of `0`).
+
+          * **Shared folder with parent path
+          to the associated folder visible to
+          the collaborator**:
+          Items are always sorted by
+          their `type` first, with
+          folders listed before files,
+          and files listed
+          before web links. Example: 'id'.
             direction (string): The direction to sort results in. This can be either in alphabetical ascending
         (`ASC`) or descending (`DESC`) order. Example: 'ASC'.
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
@@ -1356,26 +2309,37 @@ class BoxApp(APIApplication):
         [fields](#param-fields) query parameter to explicitly request
         any specific fields.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
-            Folders, important
+            Folders
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         url = f"{self.base_url}/folders/{folder_id}"
         query_params = {k: v for k, v in [('fields', fields), ('sort', sort), ('direction', direction), ('offset', offset), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_folders_id(self, folder_id, fields=None, name=None, parent=None) -> dict[str, Any]:
+    def post_folders_id(self, folder_id: str, fields: Optional[List[str]] = None, name: Optional[str] = None, parent: Optional[Any] = None) -> dict[str, Any]:
         """
-        Creates a new resource within a specific folder using the API, identified by the provided `folder_id`, and returns a status message upon successful creation.
+        Restore folder
 
         Args:
             folder_id (string): folder_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -1386,36 +2350,57 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a folder object when the folder has been restored.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
-            Trashed folders, important
+            Trashed folders
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'folder_id'.")
+        request_body_data = None
+        request_body_data = {
             'name': name,
             'parent': parent,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/folders/{folder_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_folders_id(self, folder_id, fields=None, name=None, description=None, sync_state=None, can_non_owners_invite=None, parent=None, shared_link=None, folder_upload_email=None, tags=None, is_collaboration_restricted_to_enterprise=None, collections=None, can_non_owners_view_collaborators=None) -> dict[str, Any]:
+    def put_folders_id(self, folder_id: str, fields: Optional[List[str]] = None, name: Optional[str] = None, description: Optional[str] = None, sync_state: Optional[str] = None, can_non_owners_invite: Optional[bool] = None, parent: Optional[Any] = None, shared_link: Optional[Any] = None, folder_upload_email: Optional[Any] = None, tags: Optional[List[str]] = None, is_collaboration_restricted_to_enterprise: Optional[bool] = None, collections: Optional[List[dict[str, Any]]] = None, can_non_owners_view_collaborators: Optional[bool] = None) -> dict[str, Any]:
         """
-        Updates an existing folder by replacing it entirely with new information, specified by the `folder_id` in the path, using the HTTP PUT method.
+        Update folder
 
         Args:
             folder_id (string): folder_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
-            name (string): The optional new name for this folder. Example: 'New Folder'.
+            name (string): The optional new name for this folder.
+
+        The following restrictions to folder names apply: names containing
+        non-printable ASCII characters, forward and backward slashes
+        (`/`, `\`), names with trailing spaces, and names `.` and `..` are
+        not allowed.
+
+        Folder names must be unique within their parent folder. The name check is case-insensitive, 
+        so a folder named `New Folder` cannot be created in a parent folder that already contains 
+        a folder named `new folder`. Example: 'New Folder'.
             description (string): The optional description of this folder Example: 'Legal contracts for the new ACME deal'.
             sync_state (string): Specifies whether a folder should be synced to a
         user's device or not. This is used by Box Sync
@@ -1465,17 +2450,22 @@ class BoxApp(APIApplication):
         [fields](#param-fields) query parameter to explicitly request
         any specific fields.
 
-        This call will return synchronously. This holds true even when
-        moving folders with a large a large number of items in all of its
-        descendants. For very large folders, this means the call could
-        take minutes or hours to return.
+        If the user is moving folders with a large number of items in all of
+        their descendants, the call will be run asynchronously. If the
+        operation is not completed within 10 minutes, the user will receive
+        a 200 OK response, and the operation will continue running.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
-            Folders, important
+            Folders
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'folder_id'.")
+        request_body_data = None
+        request_body_data = {
             'name': name,
             'description': description,
             'sync_state': sync_state,
@@ -1488,16 +2478,21 @@ class BoxApp(APIApplication):
             'collections': collections,
             'can_non_owners_view_collaborators': can_non_owners_view_collaborators,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/folders/{folder_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_folders_id(self, folder_id, recursive=None) -> Any:
+    def delete_folders_id(self, folder_id: str, recursive: Optional[bool] = None) -> Any:
         """
-        Deletes a folder with the specified ID, optionally removing all its contents recursively, and returns a status code indicating the success or failure of the operation.
+        Delete folder
 
         Args:
             folder_id (string): folder_id
@@ -1508,26 +2503,37 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the folder is successfully deleted
         or moved to the trash.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Folders
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         url = f"{self.base_url}/folders/{folder_id}"
         query_params = {k: v for k, v in [('recursive', recursive)] if v is not None}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_folders_id_app_item_associations(self, folder_id, limit=None, marker=None, application_type=None) -> dict[str, Any]:
+    def get_folder_app_item_associations(self, folder_id: str, limit: Optional[int] = None, marker: Optional[str] = None, application_type: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a list of application item associations for a specified folder using the "GET" method, allowing optional filtering by limit, marker, and application type.
+        List folder app item associations
 
         Args:
             folder_id (string): folder_id
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             application_type (string): If given, returns only app items for this application type Example: 'hubs'.
 
         Returns:
@@ -1535,85 +2541,141 @@ class BoxApp(APIApplication):
         app items on this folder an empty collection will be returned.
         This list includes app items on ancestors of this folder.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             App item associations
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         url = f"{self.base_url}/folders/{folder_id}/app_item_associations"
         query_params = {k: v for k, v in [('limit', limit), ('marker', marker), ('application_type', application_type)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_folders_id_items(self, folder_id, fields=None, usemarker=None, marker=None, offset=None, limit=None, sort=None, direction=None) -> dict[str, Any]:
+    def get_folders_id_items(self, folder_id: str, fields: Optional[List[str]] = None, usemarker: Optional[bool] = None, marker: Optional[str] = None, offset: Optional[int] = None, limit: Optional[int] = None, sort: Optional[str] = None, direction: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a list of items within a specified Box folder using the "GET" method, returning files, folders, and web links based on the provided folder ID and optional query parameters for filtering and sorting.
+        List items in folder
 
         Args:
             folder_id (string): folder_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
-        to the fields requested. Additionally this field can be used to query any metadata
+        to the fields requested.
+
+        Additionally this field can be used to query any metadata
         applied to the file by specifying the `metadata` field as well
         as the scope and key of the template to retrieve, for example
         `?fields=metadata.enterprise_12345.contractTemplate`. Example: "['id', 'type', 'name']".
             usemarker (boolean): Specifies whether to use marker-based pagination instead of
         offset-based pagination. Only one pagination method can
-        be used at a time. By setting this value to true, the API will return a `marker` field
+        be used at a time.
+
+        By setting this value to true, the API will return a `marker` field
         that can be passed as a parameter to this endpoint to get the next
         page of the response. Example: 'True'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             sort (string): Defines the **second** attribute by which items
-        are sorted. The folder type affects the way the items
-        are sorted: * **Standard folder**: Items are always sorted by their `type` first, with folders listed before files, and files listed before web links. * **Root folder**: This parameter is not supported for marker-based pagination on the root folder (the folder with an `id` of `0`). * **Shared folder with parent path to the associated folder visible to the collaborator**: Items are always sorted by their `type` first, with folders listed before files, and files listed before web links. Example: 'id'.
+        are sorted.
+
+        The folder type affects the way the items
+        are sorted:
+
+          * **Standard folder**:
+          Items are always sorted by
+          their `type` first, with
+          folders listed before files,
+          and files listed
+          before web links.
+
+          * **Root folder**:
+          This parameter is not supported
+          for marker-based pagination
+          on the root folder
+
+          (the folder with an `id` of `0`).
+
+          * **Shared folder with parent path
+          to the associated folder visible to
+          the collaborator**:
+          Items are always sorted by
+          their `type` first, with
+          folders listed before files,
+          and files listed
+          before web links. Example: 'id'.
             direction (string): The direction to sort results in. This can be either in alphabetical ascending
         (`ASC`) or descending (`DESC`) order. Example: 'ASC'.
 
         Returns:
             dict[str, Any]: Returns a collection of files, folders, and web links contained in a folder.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
-            Folders, important
+            Folders
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         url = f"{self.base_url}/folders/{folder_id}/items"
         query_params = {k: v for k, v in [('fields', fields), ('usemarker', usemarker), ('marker', marker), ('offset', offset), ('limit', limit), ('sort', sort), ('direction', direction)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_folders(self, fields=None, name=None, parent=None, folder_upload_email=None, sync_state=None) -> dict[str, Any]:
+    def post_folders(self, fields: Optional[List[str]] = None, name: Optional[str] = None, parent: Optional[dict[str, Any]] = None, folder_upload_email: Optional[Any] = None, sync_state: Optional[str] = None) -> dict[str, Any]:
         """
-        Creates a new folder using the POST method at the "/folders" path, allowing for optional specification of fields to include in the response.
+        Create folder
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
             name (string): The name for the new folder.
 
-        There are some restrictions to the file name. Names containing
+        The following restrictions to folder names apply: names containing
         non-printable ASCII characters, forward and backward slashes
-        (`/`, `\`), as well as names with trailing spaces are
-        prohibited.
+        (`/`, `\`), names with trailing spaces, and names `.` and `..` are
+        not allowed.
 
-        Additionally, the names `.` and `..` are
-        not allowed either. Example: 'New Folder'.
+        Folder names must be unique within their parent folder. The name check is case-insensitive, 
+        so a folder named `New Folder` cannot be created in a parent folder that already contains 
+        a folder named `new folder`. Example: 'New Folder'.
             parent (object): The parent folder to create the new folder within.
             folder_upload_email (string): folder_upload_email
             sync_state (string): Specifies whether a folder should be synced to a
@@ -1627,31 +2689,43 @@ class BoxApp(APIApplication):
         [fields](#param-fields) query parameter to explicitly request
         any specific fields.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
-            Folders, important
+            Folders
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'name': name,
             'parent': parent,
             'folder_upload_email': folder_upload_email,
             'sync_state': sync_state,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/folders"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_folders_id_copy(self, folder_id, fields=None, name=None, parent=None) -> dict[str, Any]:
+    def post_folders_id_copy(self, folder_id: str, fields: Optional[List[str]] = None, name: Optional[str] = None, parent: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Copies a specified folder with the given `folder_id` to a destination folder, creating a duplicate of the original folder's contents.
+        Copy folder
 
         Args:
             folder_id (string): folder_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -1674,38 +2748,52 @@ class BoxApp(APIApplication):
         [fields](#param-fields) query parameter to explicitly request
         any specific fields.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Folders
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'folder_id'.")
+        request_body_data = None
+        request_body_data = {
             'name': name,
             'parent': parent,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/folders/{folder_id}/copy"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_folders_id_collaborations(self, folder_id, fields=None, limit=None, marker=None) -> dict[str, Any]:
+    def get_folders_id_collaborations(self, folder_id: str, fields: Optional[List[str]] = None, limit: Optional[int] = None, marker: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a list of pending and active collaborations for a specified folder, returning all users who have access or have been invited to the folder[1][3][4].
+        List folder collaborations
 
         Args:
             folder_id (string): folder_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
 
         Returns:
             dict[str, Any]: Returns a collection of collaboration objects. If there are no
@@ -1715,26 +2803,37 @@ class BoxApp(APIApplication):
         is set to `pending`, indicating invitations that have been sent but not
         yet accepted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Collaborations (List)
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         url = f"{self.base_url}/folders/{folder_id}/collaborations"
         query_params = {k: v for k, v in [('fields', fields), ('limit', limit), ('marker', marker)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_folders_id_trash(self, folder_id, fields=None) -> dict[str, Any]:
+    def get_folders_id_trash(self, folder_id: str, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves the details of a specified folder that has been moved to the trash, including information about when it was trashed.
+        Get trashed folder
 
         Args:
             folder_id (string): folder_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -1745,20 +2844,29 @@ class BoxApp(APIApplication):
         including information about when the it
         was moved to the trash.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Trashed folders
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         url = f"{self.base_url}/folders/{folder_id}/trash"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_folders_id_trash(self, folder_id) -> Any:
+    def delete_folders_id_trash(self, folder_id: str) -> Any:
         """
-        Permanently deletes a folder (and its contents) from the trash, or if not already in the trash, moves the specified folder to the trash for eventual deletion.
+        Permanently remove folder
 
         Args:
             folder_id (string): folder_id
@@ -1767,20 +2875,29 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the folder was
         permanently deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Trashed folders
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         url = f"{self.base_url}/folders/{folder_id}/trash"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_folders_id_metadata(self, folder_id) -> dict[str, Any]:
+    def get_folders_id_metadata(self, folder_id: str) -> dict[str, Any]:
         """
-        Retrieves metadata for a specific folder identified by its ID using the GET method.
+        List metadata instances on folder
 
         Args:
             folder_id (string): folder_id
@@ -1791,20 +2908,29 @@ class BoxApp(APIApplication):
         This API does not support pagination and will therefore always return
         all of the metadata associated to the folder.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Metadata instances (Folders)
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         url = f"{self.base_url}/folders/{folder_id}/metadata"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_folders_id_metadata_enterprise_security_classification_6_vmvochw_uwo(self, folder_id) -> dict[str, Any]:
+    def get_folder_security_classification(self, folder_id: str) -> dict[str, Any]:
         """
-        Retrieves the classification metadata instance applied to a specified folder, which includes security classifications set for the folder using the enterprise security classification template.
+        Get classification on folder
 
         Args:
             folder_id (string): folder_id
@@ -1815,20 +2941,29 @@ class BoxApp(APIApplication):
         field that lists all the classifications available to this
         enterprise.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Classifications on folders
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         url = f"{self.base_url}/folders/{folder_id}/metadata/enterprise/securityClassification-6VMVochwUWo"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_folders_id_metadata_enterprise_security_classification_6_vmvochw_uwo(self, folder_id, Box__Security__Classification__Key=None) -> dict[str, Any]:
+    def post_folder_metadata_security_classification(self, folder_id: str, Box__Security__Classification__Key: Optional[str] = None) -> dict[str, Any]:
         """
-        Adds a security classification to a folder using the provided `folder_id` by specifying the classification label, utilizing the Box API.
+        Add classification to folder
 
         Args:
             folder_id (string): folder_id
@@ -1843,25 +2978,67 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the classification template instance
         that was applied to the folder.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Classifications on folders
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'folder_id'.")
+        request_body_data = None
+        request_body_data = {
             'Box__Security__Classification__Key': Box__Security__Classification__Key,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/folders/{folder_id}/metadata/enterprise/securityClassification-6VMVochwUWo"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-
-    def delete_folders_id_metadata_enterprise_security_classification_6_vmvochw_uwo(self, folder_id) -> Any:
+    def update_folder_security_classification(self, folder_id: str, items: Optional[List[dict[str, Any]]] = None) -> dict[str, Any]:
         """
-        Removes any security classifications from a specified folder using the Box Platform API.
+        Update classification on folder
+
+        Args:
+            folder_id (string): folder_id
+
+        Returns:
+            dict[str, Any]: Returns the updated classification metadata template instance.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Classifications on folders
+        """
+        if folder_id is None:
+            raise ValueError("Missing required parameter 'folder_id'.")
+        request_body_data = None
+        # Using array parameter 'items' directly as request body
+        request_body_data = items
+        url = f"{self.base_url}/folders/{folder_id}/metadata/enterprise/securityClassification-6VMVochwUWo"
+        query_params = {}
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json-patch+json')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def delete_security_classification_by_folder_id(self, folder_id: str) -> Any:
+        """
+        Remove classification from folder
 
         Args:
             folder_id (string): folder_id
@@ -1870,20 +3047,29 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the classification is
         successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Classifications on folders
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         url = f"{self.base_url}/folders/{folder_id}/metadata/enterprise/securityClassification-6VMVochwUWo"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_folders_id_metadata_id_id(self, folder_id, scope, template_key) -> dict[str, Any]:
+    def get_folders_id_metadata_id_id(self, folder_id: str, scope: str, template_key: str) -> dict[str, Any]:
         """
-        Retrieves metadata for a specific folder according to the specified scope and template key.
+        Get metadata instance on folder
 
         Args:
             folder_id (string): folder_id
@@ -1895,25 +3081,113 @@ class BoxApp(APIApplication):
         additional "key:value" pairs defined by the user or
         an application.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Metadata instances (Folders)
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         if scope is None:
-            raise ValueError("Missing required parameter 'scope'")
+            raise ValueError("Missing required parameter 'scope'.")
         if template_key is None:
-            raise ValueError("Missing required parameter 'template_key'")
+            raise ValueError("Missing required parameter 'template_key'.")
         url = f"{self.base_url}/folders/{folder_id}/metadata/{scope}/{template_key}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-
-    def delete_folders_id_metadata_id_id(self, folder_id, scope, template_key) -> Any:
+    def post_folders_id_metadata_id_id(self, folder_id: str, scope: str, template_key: str, request_body: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Deletes a metadata template instance from a specified folder using the provided folder ID, scope, and template key.
+        Create metadata instance on folder
+
+        Args:
+            folder_id (string): folder_id
+            scope (string): scope
+            template_key (string): template_key
+            request_body (dict | None): Optional dictionary for an empty JSON request body (e.g., {}).
+
+        Returns:
+            dict[str, Any]: Returns the instance of the template that was applied to the folder,
+        including the data that was applied to the template.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Metadata instances (Folders)
+        """
+        if folder_id is None:
+            raise ValueError("Missing required parameter 'folder_id'.")
+        if scope is None:
+            raise ValueError("Missing required parameter 'scope'.")
+        if template_key is None:
+            raise ValueError("Missing required parameter 'template_key'.")
+        request_body_data = None
+        request_body_data = request_body if request_body is not None else {}
+        url = f"{self.base_url}/folders/{folder_id}/metadata/{scope}/{template_key}"
+        query_params = {}
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def put_folders_id_metadata_id_id(self, folder_id: str, scope: str, template_key: str, items: Optional[List[dict[str, Any]]] = None) -> dict[str, Any]:
+        """
+        Update metadata instance on folder
+
+        Args:
+            folder_id (string): folder_id
+            scope (string): scope
+            template_key (string): template_key
+
+        Returns:
+            dict[str, Any]: Returns the updated metadata template instance, with the
+        custom template data included.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Metadata instances (Folders)
+        """
+        if folder_id is None:
+            raise ValueError("Missing required parameter 'folder_id'.")
+        if scope is None:
+            raise ValueError("Missing required parameter 'scope'.")
+        if template_key is None:
+            raise ValueError("Missing required parameter 'template_key'.")
+        request_body_data = None
+        # Using array parameter 'items' directly as request body
+        request_body_data = items
+        url = f"{self.base_url}/folders/{folder_id}/metadata/{scope}/{template_key}"
+        query_params = {}
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json-patch+json')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def delete_folder_metadata(self, folder_id: str, scope: str, template_key: str) -> Any:
+        """
+        Remove metadata instance from folder
 
         Args:
             folder_id (string): folder_id
@@ -1924,53 +3198,78 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the metadata is
         successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Metadata instances (Folders)
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         if scope is None:
-            raise ValueError("Missing required parameter 'scope'")
+            raise ValueError("Missing required parameter 'scope'.")
         if template_key is None:
-            raise ValueError("Missing required parameter 'template_key'")
+            raise ValueError("Missing required parameter 'template_key'.")
         url = f"{self.base_url}/folders/{folder_id}/metadata/{scope}/{template_key}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_folders_trash_items(self, fields=None, limit=None, offset=None, usemarker=None, marker=None, direction=None, sort=None) -> dict[str, Any]:
+    def get_folders_trash_items(self, fields: Optional[List[str]] = None, limit: Optional[int] = None, offset: Optional[int] = None, usemarker: Optional[bool] = None, marker: Optional[str] = None, direction: Optional[str] = None, sort: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a paginated list of items currently residing in the trash folder, supporting optional filtering, sorting, and field selection.
+        List trashed items
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
             limit (integer): The maximum number of items to return per page. Example: '1000'.
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
             usemarker (boolean): Specifies whether to use marker-based pagination instead of
         offset-based pagination. Only one pagination method can
-        be used at a time. By setting this value to true, the API will return a `marker` field
+        be used at a time.
+
+        By setting this value to true, the API will return a `marker` field
         that can be passed as a parameter to this endpoint to get the next
         page of the response. Example: 'True'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             direction (string): The direction to sort results in. This can be either in alphabetical ascending
         (`ASC`) or descending (`DESC`) order. Example: 'ASC'.
             sort (string): Defines the **second** attribute by which items
-        are sorted. Items are always sorted by their `type` first, with
+        are sorted.
+
+        Items are always sorted by their `type` first, with
         folders listed before files, and files listed
-        before web links. This parameter is not supported when using marker-based pagination. Example: 'name'.
+        before web links.
+
+        This parameter is not supported when using marker-based pagination. Example: 'name'.
 
         Returns:
             dict[str, Any]: Returns a list of items that have been deleted
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Trashed items
@@ -1979,11 +3278,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('fields', fields), ('limit', limit), ('offset', offset), ('usemarker', usemarker), ('marker', marker), ('direction', direction), ('sort', sort)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_folders_id_watermark(self, folder_id) -> dict[str, Any]:
+    def get_folders_id_watermark(self, folder_id: str) -> dict[str, Any]:
         """
-        Retrieves the watermark information for a specific folder using the folder ID.
+        Get watermark for folder
 
         Args:
             folder_id (string): folder_id
@@ -1992,20 +3296,29 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns an object containing information about the
         watermark associated for to this folder.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Watermarks (Folders)
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         url = f"{self.base_url}/folders/{folder_id}/watermark"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_folders_id_watermark(self, folder_id, watermark=None) -> dict[str, Any]:
+    def put_folders_id_watermark(self, folder_id: str, watermark: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Applies a watermark to a specified folder using the Box API by sending a PUT request to the "/folders/{folder_id}/watermark" endpoint.
+        Apply watermark to folder
 
         Args:
             folder_id (string): folder_id
@@ -2015,24 +3328,34 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns an updated watermark if a watermark already
         existed on this folder.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Watermarks (Folders)
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'folder_id'.")
+        request_body_data = None
+        request_body_data = {
             'watermark': watermark,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/folders/{folder_id}/watermark"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_folders_id_watermark(self, folder_id) -> Any:
+    def delete_folders_id_watermark(self, folder_id: str) -> Any:
         """
-        Deletes a watermark from a specified folder by its ID using the Box API.
+        Remove watermark from folder
 
         Args:
             folder_id (string): folder_id
@@ -2041,32 +3364,49 @@ class BoxApp(APIApplication):
             Any: An empty response will be returned when the watermark
         was successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Watermarks (Folders)
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         url = f"{self.base_url}/folders/{folder_id}/watermark"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_folder_locks(self, folder_id) -> dict[str, Any]:
+    def get_folder_locks(self, folder_id: str) -> dict[str, Any]:
         """
-        Retrieves information about folder locks for a specified folder using its ID.
+        List folder locks
 
         Args:
-            folder_id (string): The unique identifier that represent a folder. The ID for any folder can be determined
+            folder_id (string): The unique identifier that represent a folder.
+
+        The ID for any folder can be determined
         by visiting this folder in the web application
         and copying the ID from the URL. For example,
-        for the URL `
-        the `folder_id` is `123`. The root folder of a Box account is
+        for the URL `https://*.app.box.com/folder/123`
+        the `folder_id` is `123`.
+
+        The root folder of a Box account is
         always represented by the ID `0`. Example: '12345'.
 
         Returns:
             dict[str, Any]: Returns details for all folder locks applied to the folder, including the
         lock type and user that applied the lock.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Folder Locks
@@ -2075,11 +3415,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('folder_id', folder_id)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_folder_locks(self, locked_operations=None, folder=None) -> dict[str, Any]:
+    def post_folder_locks(self, locked_operations: Optional[dict[str, Any]] = None, folder: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Creates a lock on a specified folder to prevent users from performing certain actions such as moving, deleting, or renaming the folder.
+        Create folder lock
 
         Args:
             locked_operations (object): The operations to lock for the folder. If `locked_operations` is
@@ -2091,23 +3436,33 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the instance of the folder lock that was applied to the folder,
         including the user that applied the lock and the operations set.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Folder Locks
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'locked_operations': locked_operations,
             'folder': folder,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/folder_locks"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_folder_locks_id(self, folder_lock_id) -> Any:
+    def delete_folder_locks_id(self, folder_lock_id: str) -> Any:
         """
-        Deletes a folder lock with the specified `folder_lock_id` in Box, requiring authentication as the folder's owner or co-owner.
+        Delete folder lock
 
         Args:
             folder_lock_id (string): folder_lock_id
@@ -2115,30 +3470,45 @@ class BoxApp(APIApplication):
         Returns:
             Any: Returns an empty response when the folder lock is successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Folder Locks
         """
         if folder_lock_id is None:
-            raise ValueError("Missing required parameter 'folder_lock_id'")
+            raise ValueError("Missing required parameter 'folder_lock_id'.")
         url = f"{self.base_url}/folder_locks/{folder_lock_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_metadata_templates(self, metadata_instance_id, marker=None, limit=None) -> dict[str, Any]:
+    def get_metadata_templates(self, metadata_instance_id: str, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of metadata templates, optionally filtered by a specific metadata instance ID, marker, and limit, using the GET method at the "/metadata_templates" path.
+        Find metadata template by instance ID
 
         Args:
             metadata_instance_id (string): The ID of an instance of the metadata template to find. Example: '01234500-12f1-1234-aa12-b1d234cb567e'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a list containing the 1 metadata template that matches the
         instance ID.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Metadata templates
@@ -2147,16 +3517,25 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('metadata_instance_id', metadata_instance_id), ('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_metadata_templates_enterprise_security_classification_6_vmvochw_uwo_schema(self) -> dict[str, Any]:
+    def get_security_classification_schema(self) -> dict[str, Any]:
         """
-        Retrieves the security classification metadata template schema, listing all available classification labels and their details for the enterprise.
+        List all classifications
 
         Returns:
             dict[str, Any]: Returns the `securityClassification` metadata template, which contains
         a `Box__Security__Classification__Key` field that lists all the
         classifications available to this enterprise.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Classifications
@@ -2165,11 +3544,16 @@ class BoxApp(APIApplication):
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_metadata_templates_enterprise_security_classification_6_vmvochw_uwo_schema_add(self, items=None) -> dict[str, Any]:
+    def add_security_classification_schema(self, items: Optional[List[dict[str, Any]]] = None) -> dict[str, Any]:
         """
-        Updates the labels and descriptions of one or more security classifications available to an enterprise using the Box API.
+        Add classification
 
         Args:
 
@@ -2178,21 +3562,62 @@ class BoxApp(APIApplication):
         contains a `Box__Security__Classification__Key` field that lists all
         the classifications available to this enterprise.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Classifications
         """
-        # Use items array directly as request body
-        request_body = items
+        request_body_data = None
+        # Using array parameter 'items' directly as request body
+        request_body_data = items
         url = f"{self.base_url}/metadata_templates/enterprise/securityClassification-6VMVochwUWo/schema#add"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-
-    def get_metadata_templates_id_id_schema(self, scope, template_key) -> dict[str, Any]:
+    def update_security_classification_schema(self, items: Optional[List[dict[str, Any]]] = None) -> dict[str, Any]:
         """
-        Retrieves the schema for a specific metadata template defined by the scope and template key using the "GET" method.
+        Update classification
+
+        Args:
+
+        Returns:
+            dict[str, Any]: Returns the updated `securityClassification` metadata template, which
+        contains a `Box__Security__Classification__Key` field that lists all
+        the classifications available to this enterprise.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Classifications
+        """
+        request_body_data = None
+        # Using array parameter 'items' directly as request body
+        request_body_data = items
+        url = f"{self.base_url}/metadata_templates/enterprise/securityClassification-6VMVochwUWo/schema#update"
+        query_params = {}
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json-patch+json')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def get_schema_template(self, scope: str, template_key: str) -> dict[str, Any]:
+        """
+        Get metadata template by name
 
         Args:
             scope (string): scope
@@ -2202,23 +3627,68 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the metadata template matching the `scope`
         and `template` name.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Metadata templates
         """
         if scope is None:
-            raise ValueError("Missing required parameter 'scope'")
+            raise ValueError("Missing required parameter 'scope'.")
         if template_key is None:
-            raise ValueError("Missing required parameter 'template_key'")
+            raise ValueError("Missing required parameter 'template_key'.")
         url = f"{self.base_url}/metadata_templates/{scope}/{template_key}/schema"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-
-    def delete_metadata_templates_id_id_schema(self, scope, template_key) -> Any:
+    def update_schema_template(self, scope: str, template_key: str, items: Optional[List[dict[str, Any]]] = None) -> dict[str, Any]:
         """
-        Deletes a metadata template and its associated instances within a specified scope using the provided template key, returning a 204 No Content response upon successful removal.
+        Update metadata template
+
+        Args:
+            scope (string): scope
+            template_key (string): template_key
+
+        Returns:
+            dict[str, Any]: Returns the updated metadata template, with the
+        custom template data included.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Metadata templates
+        """
+        if scope is None:
+            raise ValueError("Missing required parameter 'scope'.")
+        if template_key is None:
+            raise ValueError("Missing required parameter 'template_key'.")
+        request_body_data = None
+        # Using array parameter 'items' directly as request body
+        request_body_data = items
+        url = f"{self.base_url}/metadata_templates/{scope}/{template_key}/schema"
+        query_params = {}
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json-patch+json')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def delete_metadata_template_schema(self, scope: str, template_key: str) -> Any:
+        """
+        Remove metadata template
 
         Args:
             scope (string): scope
@@ -2228,22 +3698,31 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the metadata
         template is successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Metadata templates
         """
         if scope is None:
-            raise ValueError("Missing required parameter 'scope'")
+            raise ValueError("Missing required parameter 'scope'.")
         if template_key is None:
-            raise ValueError("Missing required parameter 'template_key'")
+            raise ValueError("Missing required parameter 'template_key'.")
         url = f"{self.base_url}/metadata_templates/{scope}/{template_key}/schema"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_metadata_templates_id(self, template_id) -> dict[str, Any]:
+    def get_metadata_templates_id(self, template_id: str) -> dict[str, Any]:
         """
-        Retrieves specific details of a metadata template by its ID using the GET method at the "/metadata_templates/{template_id}" endpoint.
+        Get metadata template by ID
 
         Args:
             template_id (string): template_id
@@ -2251,29 +3730,44 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the metadata template that matches the ID.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Metadata templates
         """
         if template_id is None:
-            raise ValueError("Missing required parameter 'template_id'")
+            raise ValueError("Missing required parameter 'template_id'.")
         url = f"{self.base_url}/metadata_templates/{template_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_metadata_templates_global(self, marker=None, limit=None) -> dict[str, Any]:
+    def get_metadata_templates_global(self, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of all global metadata templates available to everyone using Box, regardless of their enterprise.
+        List all global metadata templates
 
         Args:
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns all of the metadata templates available to all enterprises
         and their corresponding schema.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Metadata templates
@@ -2282,20 +3776,31 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_metadata_templates_enterprise(self, marker=None, limit=None) -> dict[str, Any]:
+    def get_metadata_templates_enterprise(self, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of metadata templates for an enterprise using the Box API, allowing users to manage and access custom templates created within their organization.
+        List all metadata templates for enterprise
 
         Args:
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns all of the metadata templates within an enterprise
         and their corresponding schema.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Metadata templates
@@ -2304,11 +3809,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_metadata_templates_schema(self, scope=None, templateKey=None, displayName=None, hidden=None, fields=None, copyInstanceOnItemCopy=None) -> dict[str, Any]:
+    def post_metadata_templates_schema(self, scope: Optional[str] = None, templateKey: Optional[str] = None, displayName: Optional[str] = None, hidden: Optional[bool] = None, fields: Optional[List[dict[str, Any]]] = None, copyInstanceOnItemCopy: Optional[bool] = None) -> dict[str, Any]:
         """
-        Creates a metadata template by passing a scope, display name, and optional fields to define the structure of metadata, returning a created template upon successful execution.
+        Create metadata template
 
         Args:
             scope (string): The scope of the metadata template to create. Applications can
@@ -2336,10 +3846,15 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: The schema representing the metadata template created.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Metadata templates
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'scope': scope,
             'templateKey': templateKey,
             'displayName': displayName,
@@ -2347,16 +3862,21 @@ class BoxApp(APIApplication):
             'fields': fields,
             'copyInstanceOnItemCopy': copyInstanceOnItemCopy,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/metadata_templates/schema"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_metadata_templates_schema_classifications(self, scope=None, templateKey=None, displayName=None, hidden=None, copyInstanceOnItemCopy=None, fields=None) -> dict[str, Any]:
+    def create_metadata_template_classification(self, scope: Optional[str] = None, templateKey: Optional[str] = None, displayName: Optional[str] = None, hidden: Optional[bool] = None, copyInstanceOnItemCopy: Optional[bool] = None, fields: Optional[List[dict[str, Any]]] = None) -> dict[str, Any]:
         """
-        Initializes the metadata template with a set of classifications at the specified path "/metadata_templates/schema#classifications" using the "POST" method.
+        Add initial classifications
 
         Args:
             scope (string): The scope in which to create the classifications. This should
@@ -2380,10 +3900,15 @@ class BoxApp(APIApplication):
         contains a `Box__Security__Classification__Key` field that lists all
         the classifications available to this enterprise.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Classifications
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'scope': scope,
             'templateKey': templateKey,
             'displayName': displayName,
@@ -2391,16 +3916,21 @@ class BoxApp(APIApplication):
             'copyInstanceOnItemCopy': copyInstanceOnItemCopy,
             'fields': fields,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/metadata_templates/schema#classifications"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_metadata_cascade_policies(self, folder_id, owner_enterprise_id=None, marker=None, offset=None) -> dict[str, Any]:
+    def get_metadata_cascade_policies(self, folder_id: str, owner_enterprise_id: Optional[str] = None, marker: Optional[str] = None, offset: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of metadata cascade policies for a specified folder, using parameters such as folder ID, owner enterprise ID, and pagination controls like marker and offset.
+        List metadata cascade policies
 
         Args:
             folder_id (string): Specifies which folder to return policies for. This can not be used on the
@@ -2409,13 +3939,21 @@ class BoxApp(APIApplication):
         cascade policies. If not specified, it defaults to the
         current enterprise. Example: '31232'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a list of metadata cascade policies
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Metadata cascade policies
@@ -2424,11 +3962,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('folder_id', folder_id), ('owner_enterprise_id', owner_enterprise_id), ('marker', marker), ('offset', offset)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_metadata_cascade_policies(self, folder_id=None, scope=None, templateKey=None) -> dict[str, Any]:
+    def post_metadata_cascade_policies(self, folder_id: Optional[str] = None, scope: Optional[str] = None, templateKey: Optional[str] = None) -> dict[str, Any]:
         """
-        Creates a metadata cascade policy using the POST method at the "/metadata_cascade_policies" path, which automatically applies a metadata template instance to all files and folders within a specified folder.
+        Create metadata cascade policy
 
         Args:
             folder_id (string): The ID of the folder to apply the policy to. This folder will
@@ -2455,24 +3998,34 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new of metadata cascade policy
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Metadata cascade policies
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'folder_id': folder_id,
             'scope': scope,
             'templateKey': templateKey,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/metadata_cascade_policies"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_metadata_cascade_policies_id(self, metadata_cascade_policy_id) -> dict[str, Any]:
+    def get_metadata_cascade_policy_by_id(self, metadata_cascade_policy_id: str) -> dict[str, Any]:
         """
-        Retrieves the details of a specific metadata cascade policy, which describes how a metadata template instance is automatically applied to all files and folders within a targeted folder, using the provided policy ID. [1][2][4]
+        Get metadata cascade policy
 
         Args:
             metadata_cascade_policy_id (string): metadata_cascade_policy_id
@@ -2480,20 +4033,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a metadata cascade policy
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Metadata cascade policies
         """
         if metadata_cascade_policy_id is None:
-            raise ValueError("Missing required parameter 'metadata_cascade_policy_id'")
+            raise ValueError("Missing required parameter 'metadata_cascade_policy_id'.")
         url = f"{self.base_url}/metadata_cascade_policies/{metadata_cascade_policy_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_metadata_cascade_policies_id(self, metadata_cascade_policy_id) -> Any:
+    def delete_metadata_cascade_policy(self, metadata_cascade_policy_id: str) -> Any:
         """
-        Deletes a specified metadata cascade policy, which stops the automatic cascading of metadata from a folder to its contents.
+        Remove metadata cascade policy
 
         Args:
             metadata_cascade_policy_id (string): metadata_cascade_policy_id
@@ -2502,20 +4064,29 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the policy
         is successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Metadata cascade policies
         """
         if metadata_cascade_policy_id is None:
-            raise ValueError("Missing required parameter 'metadata_cascade_policy_id'")
+            raise ValueError("Missing required parameter 'metadata_cascade_policy_id'.")
         url = f"{self.base_url}/metadata_cascade_policies/{metadata_cascade_policy_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_metadata_cascade_policies_id_apply(self, metadata_cascade_policy_id, conflict_resolution=None) -> Any:
+    def apply_metadata_cascade_policy_by_id(self, metadata_cascade_policy_id: str, conflict_resolution: Optional[str] = None) -> Any:
         """
-        [LLM could not generate summary for POST /metadata_cascade_policies/{metadata_cascade_policy_id}/apply]
+        Force-apply metadata cascade policy to folder
 
         Args:
             metadata_cascade_policy_id (string): metadata_cascade_policy_id
@@ -2535,24 +4106,34 @@ class BoxApp(APIApplication):
         is complete. There is currently no API to check for the status of this
         operation.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Metadata cascade policies
         """
         if metadata_cascade_policy_id is None:
-            raise ValueError("Missing required parameter 'metadata_cascade_policy_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'metadata_cascade_policy_id'.")
+        request_body_data = None
+        request_body_data = {
             'conflict_resolution': conflict_resolution,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/metadata_cascade_policies/{metadata_cascade_policy_id}/apply"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_metadata_queries_execute_read(self, from_=None, query=None, query_params=None, ancestor_folder_id=None, order_by=None, limit=None, marker=None, fields=None) -> dict[str, Any]:
+    def execute_metadata_query(self, from_: Optional[str] = None, query: Optional[str] = None, query_params: Optional[dict[str, Any]] = None, ancestor_folder_id: Optional[str] = None, order_by: Optional[List[dict[str, Any]]] = None, limit: Optional[int] = None, marker: Optional[str] = None, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Executes a metadata query using SQL-like syntax to retrieve files and folders from Box based on specific metadata criteria via a POST request to the "/metadata_queries/execute_read" endpoint.
+        Query files/folders by metadata
 
         Args:
             from_ (string): Specifies the template used in the query. Must be in the form
@@ -2603,10 +4184,15 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a list of files and folders that match this metadata query.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Search
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'from': from_,
             'query': query,
             'query_params': query_params,
@@ -2616,22 +4202,29 @@ class BoxApp(APIApplication):
             'marker': marker,
             'fields': fields,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/metadata_queries/execute_read"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_comments_id(self, comment_id, fields=None) -> dict[str, Any]:
+    def get_comments_id(self, comment_id: str, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves details of a specific comment by its ID, optionally returning only specified fields.
+        Get comment
 
         Args:
             comment_id (string): comment_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -2640,26 +4233,37 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a full comment object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Comments
         """
         if comment_id is None:
-            raise ValueError("Missing required parameter 'comment_id'")
+            raise ValueError("Missing required parameter 'comment_id'.")
         url = f"{self.base_url}/comments/{comment_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_comments_id(self, comment_id, fields=None, message=None) -> dict[str, Any]:
+    def put_comments_id(self, comment_id: str, fields: Optional[List[str]] = None, message: Optional[str] = None) -> dict[str, Any]:
         """
-        Replaces or updates a comment with the specified comment_id using the provided data and returns a status indicating success or failure.
+        Update comment
 
         Args:
             comment_id (string): comment_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -2669,24 +4273,34 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the updated comment object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Comments
         """
         if comment_id is None:
-            raise ValueError("Missing required parameter 'comment_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'comment_id'.")
+        request_body_data = None
+        request_body_data = {
             'message': message,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/comments/{comment_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_comments_id(self, comment_id) -> Any:
+    def delete_comments_id(self, comment_id: str) -> Any:
         """
-        Deletes a comment identified by its unique `comment_id` using the HTTP DELETE method.
+        Remove comment
 
         Args:
             comment_id (string): comment_id
@@ -2694,25 +4308,36 @@ class BoxApp(APIApplication):
         Returns:
             Any: Returns an empty response when the comment has been deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Comments
         """
         if comment_id is None:
-            raise ValueError("Missing required parameter 'comment_id'")
+            raise ValueError("Missing required parameter 'comment_id'.")
         url = f"{self.base_url}/comments/{comment_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_comments(self, fields=None, message=None, tagged_message=None, item=None) -> dict[str, Any]:
+    def post_comments(self, fields: Optional[List[str]] = None, message: Optional[str] = None, tagged_message: Optional[str] = None, item: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Creates a new comment and allows specifying which fields to include in the response.
+        Create comment
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -2741,30 +4366,42 @@ class BoxApp(APIApplication):
         [fields](#param-fields) query parameter to explicitly request
         any specific fields.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Comments
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'message': message,
             'tagged_message': tagged_message,
             'item': item,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/comments"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_collaborations_id(self, collaboration_id, fields=None) -> dict[str, Any]:
+    def get_collaborations_id(self, collaboration_id: str, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves details of a specific collaboration identified by its unique ID, optionally filtering the returned fields as specified in the request.
+        Get collaboration
 
         Args:
             collaboration_id (string): collaboration_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -2773,20 +4410,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a collaboration object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Collaborations
         """
         if collaboration_id is None:
-            raise ValueError("Missing required parameter 'collaboration_id'")
+            raise ValueError("Missing required parameter 'collaboration_id'.")
         url = f"{self.base_url}/collaborations/{collaboration_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_collaborations_id(self, collaboration_id, role=None, status=None, expires_at=None, can_view_path=None) -> dict[str, Any]:
+    def put_collaborations_id(self, collaboration_id: str, role: Optional[str] = None, status: Optional[str] = None, expires_at: Optional[str] = None, can_view_path: Optional[bool] = None) -> dict[str, Any]:
         """
-        Updates a collaboration by replacing it with the data sent in the request body at the specified collaboration ID using the PUT method.
+        Update collaboration
 
         Args:
             collaboration_id (string): collaboration_id
@@ -2824,27 +4470,37 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns an updated collaboration object unless the owner has changed.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Collaborations
         """
         if collaboration_id is None:
-            raise ValueError("Missing required parameter 'collaboration_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'collaboration_id'.")
+        request_body_data = None
+        request_body_data = {
             'role': role,
             'status': status,
             'expires_at': expires_at,
             'can_view_path': can_view_path,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/collaborations/{collaboration_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_collaborations_id(self, collaboration_id) -> Any:
+    def delete_collaborations_id(self, collaboration_id: str) -> Any:
         """
-        Deletes a collaboration specified by the `collaboration_id` using the DELETE method, returning an HTTP 204 response if successful.
+        Remove collaboration
 
         Args:
             collaboration_id (string): collaboration_id
@@ -2853,31 +4509,44 @@ class BoxApp(APIApplication):
             Any: A blank response is returned if the collaboration was
         successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Collaborations
         """
         if collaboration_id is None:
-            raise ValueError("Missing required parameter 'collaboration_id'")
+            raise ValueError("Missing required parameter 'collaboration_id'.")
         url = f"{self.base_url}/collaborations/{collaboration_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_collaborations(self, status, fields=None, offset=None, limit=None) -> dict[str, Any]:
+    def get_collaborations(self, status: str, fields: Optional[List[str]] = None, offset: Optional[int] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of collaborations filtered by status, with optional fields and pagination, using the GET method at the "/collaborations" endpoint.
+        List pending collaborations
 
         Args:
             status (string): The status of the collaborations to retrieve Example: 'pending'.
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
@@ -2888,6 +4557,10 @@ class BoxApp(APIApplication):
         If the user has no pending collaborations, the collection
         will be empty.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Collaborations (List)
         """
@@ -2895,16 +4568,23 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('status', status), ('fields', fields), ('offset', offset), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_collaborations(self, fields=None, notify=None, item=None, accessible_by=None, role=None, is_access_only=None, can_view_path=None, expires_at=None) -> dict[str, Any]:
+    def post_collaborations(self, fields: Optional[List[str]] = None, notify: Optional[bool] = None, item: Optional[dict[str, Any]] = None, accessible_by: Optional[dict[str, Any]] = None, role: Optional[str] = None, is_access_only: Optional[bool] = None, can_view_path: Optional[bool] = None, expires_at: Optional[str] = None) -> dict[str, Any]:
         """
-        Creates new collaborations using the POST method at the "/collaborations" path, allowing optional query parameters for specifying fields and notifications.
+        Create collaboration
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -2945,10 +4625,15 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new collaboration object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Collaborations
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'item': item,
             'accessible_by': accessible_by,
             'role': role,
@@ -2956,31 +4641,65 @@ class BoxApp(APIApplication):
             'can_view_path': can_view_path,
             'expires_at': expires_at,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/collaborations"
         query_params = {k: v for k, v in [('fields', fields), ('notify', notify)] if v is not None}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_search(self, query=None, scope=None, file_extensions=None, created_at_range=None, updated_at_range=None, size_range=None, owner_user_ids=None, recent_updater_user_ids=None, ancestor_folder_ids=None, content_types=None, type=None, trash_content=None, mdfilters=None, sort=None, direction=None, limit=None, include_recent_shared_links=None, fields=None, offset=None, deleted_user_ids=None, deleted_at_range=None) -> Any:
+    def get_search(self, query: Optional[str] = None, scope: Optional[str] = None, file_extensions: Optional[List[str]] = None, created_at_range: Optional[List[str]] = None, updated_at_range: Optional[List[str]] = None, size_range: Optional[List[int]] = None, owner_user_ids: Optional[List[str]] = None, recent_updater_user_ids: Optional[List[str]] = None, ancestor_folder_ids: Optional[List[str]] = None, content_types: Optional[List[str]] = None, type: Optional[str] = None, trash_content: Optional[str] = None, mdfilters: Optional[List[dict[str, Any]]] = None, sort: Optional[str] = None, direction: Optional[str] = None, limit: Optional[int] = None, include_recent_shared_links: Optional[bool] = None, fields: Optional[List[str]] = None, offset: Optional[int] = None, deleted_user_ids: Optional[List[str]] = None, deleted_at_range: Optional[List[str]] = None) -> Any:
         """
-        Searches GitHub resources using the "GET" method at the "/search" path, allowing for filtering by various parameters such as query, scope, file extensions, creation and update times, size range, and more to return relevant results.
+        Search for content
 
         Args:
             query (string): The string to search for. This query is matched against item names,
         descriptions, text content of files, and various other fields of
-        the different item types. This parameter supports a variety of operators to further refine
-        the results returns. * `""` - by wrapping a query in double quotes only exact matches are returned by the API. Exact searches do not return search matches based on specific character sequences. Instead, they return matches based on phrases, that is, word sequences. For example: A search for `"Blue-Box"` may return search results including the sequence `"blue.box"`, `"Blue Box"`, and `"Blue-Box"`; any item containing the words `Blue` and `Box` consecutively, in the order specified.
-        * `AND` - returns items that contain both the search terms. For example, a search for `marketing AND BoxWorks` returns items that have both `marketing` and `BoxWorks` within its text in any order. It does not return a result that only has `BoxWorks` in its text.
-        * `OR` - returns items that contain either of the search terms. For example, a search for `marketing OR BoxWorks` returns a result that has either `marketing` or `BoxWorks` within its text. Using this operator is not necessary as we implicitly interpret multi-word queries as `OR` unless another supported boolean term is used.
-        * `NOT` - returns items that do not contain the search term provided. For example, a search for `marketing AND NOT BoxWorks` returns a result that has only `marketing` within its text. Results containing `BoxWorks` are omitted. We do not support lower case (that is,
+        the different item types.
+
+        This parameter supports a variety of operators to further refine
+        the results returns.
+
+        * `""` - by wrapping a query in double quotes only exact matches are
+          returned by the API. Exact searches do not return search matches
+          based on specific character sequences. Instead, they return
+          matches based on phrases, that is, word sequences. For example:
+          A search for `"Blue-Box"` may return search results including
+          the sequence `"blue.box"`, `"Blue Box"`, and `"Blue-Box"`;
+          any item containing the words `Blue` and `Box` consecutively, in
+          the order specified.
+        * `AND` - returns items that contain both the search terms. For
+          example, a search for `marketing AND BoxWorks` returns items
+          that have both `marketing` and `BoxWorks` within its text in any order.
+          It does not return a result that only has `BoxWorks` in its text.
+        * `OR` - returns items that contain either of the search terms. For
+          example, a search for `marketing OR BoxWorks` returns a result that
+          has either `marketing` or `BoxWorks` within its text. Using this
+          operator is not necessary as we implicitly interpret multi-word
+          queries as `OR` unless another supported boolean term is used.
+        * `NOT` - returns items that do not contain the search term provided.
+          For example, a search for `marketing AND NOT BoxWorks` returns a result
+          that has only `marketing` within its text. Results containing
+          `BoxWorks` are omitted.
+
+        We do not support lower case (that is,
         `and`, `or`, and `not`) or mixed case (that is, `And`, `Or`, and `Not`)
-        operators. This field is required unless the `mdfilters` parameter is defined. Example: 'sales'.
+        operators.
+
+        This field is required unless the `mdfilters` parameter is defined. Example: 'sales'.
             scope (string): Limits the search results to either the files that the user has
-        access to, or to files available to the entire enterprise. The scope defaults to `user_content`, which limits the search
+        access to, or to files available to the entire enterprise.
+
+        The scope defaults to `user_content`, which limits the search
         results to content that is available to the currently authenticated
-        user. The `enterprise_content` can be requested by an admin through our
+        user.
+
+        The `enterprise_content` can be requested by an admin through our
         support channels. Once this scope has been enabled for a user, it
         will allow that use to query for content across the entire
         enterprise and not only the content that they have access to. Example: 'user_content'.
@@ -2988,102 +4707,182 @@ class BoxApp(APIApplication):
         file extensions. This list is a comma-separated list of file extensions
         without the dots. Example: "['pdf', 'png', 'gif']".
             created_at_range (array): Limits the search results to any items created within
-        a given date range. Date ranges are defined as comma separated RFC3339
-        timestamps. If the the start date is omitted (`,2014-05-17T13:35:01-07:00`)
-        anything created before the end date will be returned. If the end date is omitted (`2014-05-15T13:35:01-07:00,`) the
+        a given date range.
+
+        Date ranges are defined as comma separated RFC3339
+        timestamps.
+
+        If the the start date is omitted (`,2014-05-17T13:35:01-07:00`)
+        anything created before the end date will be returned.
+
+        If the end date is omitted (`2014-05-15T13:35:01-07:00,`) the
         current date will be used as the end date instead. Example: "['2014-05-15T13:35:01-07:00', '2014-05-17T13:35:01-07:00']".
             updated_at_range (array): Limits the search results to any items updated within
-        a given date range. Date ranges are defined as comma separated RFC3339
-        timestamps. If the start date is omitted (`,2014-05-17T13:35:01-07:00`)
-        anything updated before the end date will be returned. If the end date is omitted (`2014-05-15T13:35:01-07:00,`) the
+        a given date range.
+
+        Date ranges are defined as comma separated RFC3339
+        timestamps.
+
+        If the start date is omitted (`,2014-05-17T13:35:01-07:00`)
+        anything updated before the end date will be returned.
+
+        If the end date is omitted (`2014-05-15T13:35:01-07:00,`) the
         current date will be used as the end date instead. Example: "['2014-05-15T13:35:01-07:00', '2014-05-17T13:35:01-07:00']".
             size_range (array): Limits the search results to any items with a size within
-        a given file size range. This applied to files and folders. Size ranges are defined as comma separated list of a lower
-        and upper byte size limit (inclusive). The upper and lower bound can be omitted to create open ranges. Example: '[1000000, 5000000]'.
+        a given file size range. This applied to files and folders.
+
+        Size ranges are defined as comma separated list of a lower
+        and upper byte size limit (inclusive).
+
+        The upper and lower bound can be omitted to create open ranges. Example: '[1000000, 5000000]'.
             owner_user_ids (array): Limits the search results to any items that are owned
         by the given list of owners, defined as a list of comma separated
-        user IDs. The items still need to be owned or shared with
+        user IDs.
+
+        The items still need to be owned or shared with
         the currently authenticated user for them to show up in the search
         results. If the user does not have access to any files owned by any of
-        the users an empty result set will be returned. To search across an entire enterprise, we recommend using the
+        the users an empty result set will be returned.
+
+        To search across an entire enterprise, we recommend using the
         `enterprise_content` scope parameter which can be requested with our
         support team. Example: "['123422', '23532', '3241212']".
             recent_updater_user_ids (array): Limits the search results to any items that have been updated
         by the given list of users, defined as a list of comma separated
-        user IDs. The items still need to be owned or shared with
+        user IDs.
+
+        The items still need to be owned or shared with
         the currently authenticated user for them to show up in the search
         results. If the user does not have access to any files owned by any of
-        the users an empty result set will be returned. This feature only searches back to the last 10 versions of an item. Example: "['123422', '23532', '3241212']".
+        the users an empty result set will be returned.
+
+        This feature only searches back to the last 10 versions of an item. Example: "['123422', '23532', '3241212']".
             ancestor_folder_ids (array): Limits the search results to items within the given
         list of folders, defined as a comma separated lists
-        of folder IDs. Search results will also include items within any subfolders
-        of those ancestor folders. The folders still need to be owned or shared with
+        of folder IDs.
+
+        Search results will also include items within any subfolders
+        of those ancestor folders.
+
+        The folders still need to be owned or shared with
         the currently authenticated user. If the folder is not accessible by this
         user, or it does not exist, a `HTTP 404` error code will be returned
-        instead. To search across an entire enterprise, we recommend using the
+        instead.
+
+        To search across an entire enterprise, we recommend using the
         `enterprise_content` scope parameter which can be requested with our
         support team. Example: "['4535234', '234123235', '2654345']".
             content_types (array): Limits the search results to any items that match the search query
-        for a specific part of the file, for example the file description. Content types are defined as a comma separated lists
-        of Box recognized content types. The allowed content types are as follows. * `name` - The name of the item, as defined by its `name` field.
-        * `description` - The description of the item, as defined by its `description` field.
+        for a specific part of the file, for example the file description.
+
+        Content types are defined as a comma separated lists
+        of Box recognized content types. The allowed content types are as follows.
+
+        * `name` - The name of the item, as defined by its `name` field.
+        * `description` - The description of the item, as defined by its
+          `description` field.
         * `file_content` - The actual content of the file.
-        * `comments` - The content of any of the comments on a file or folder.
-        * `tags` - Any tags that are applied to an item, as defined by its `tags` field. Example: "['name', 'description']".
+        * `comments` - The content of any of the comments on a file or
+           folder.
+        * `tags` - Any tags that are applied to an item, as defined by its
+           `tags` field. Example: "['name', 'description']".
             type (string): Limits the search results to any items of this type. This
         parameter only takes one value. By default the API returns
-        items that match any of these types. * `file` - Limits the search results to files
+        items that match any of these types.
+
+        * `file` - Limits the search results to files
         * `folder` - Limits the search results to folders
-        * `web_link` - Limits the search results to web links, also known as bookmarks Example: 'file'.
-            trash_content (string): Determines if the search should look in the trash for items. By default, this API only returns search results for items
-        not currently in the trash (`non_trashed_only`). * `trashed_only` - Only searches for items currently in the trash
-        * `non_trashed_only` - Only searches for items currently not in the trash
+        * `web_link` - Limits the search results to web links, also known
+           as bookmarks Example: 'file'.
+            trash_content (string): Determines if the search should look in the trash for items.
+
+        By default, this API only returns search results for items
+        not currently in the trash (`non_trashed_only`).
+
+        * `trashed_only` - Only searches for items currently in the trash
+        * `non_trashed_only` - Only searches for items currently not in
+          the trash
         * `all_items` - Searches for both trashed and non-trashed items. Example: 'non_trashed_only'.
             mdfilters (array): Limits the search results to any items for which the metadata matches the provided filter.
-        This parameter is a list that specifies exactly **one** metadata template used to filter the search results. The parameter is required unless the `query` parameter is provided. Example: "[{'scope': 'enterprise', 'templateKey': 'contract', 'filters': [{'category': 'online'}, {'contractValue': 100000}]}]".
+        This parameter is a list that specifies exactly **one** metadata template used to filter the search results. 
+        The parameter is required unless the `query` parameter is provided. Example: "[{'scope': 'enterprise', 'templateKey': 'contract', 'filters': [{'category': 'online'}, {'contractValue': 100000}]}]".
             sort (string): Defines the order in which search results are returned. This API
         defaults to returning items by relevance unless this parameter is
-        explicitly specified. * `relevance` (default) returns the results sorted by relevance to the
+        explicitly specified.
+
+        * `relevance` (default) returns the results sorted by relevance to the
         query search term. The relevance is based on the occurrence of the search
         term in the items name, description, content, and additional properties.
         * `modified_at` returns the results ordered in descending order by date
         at which the item was last modified. Example: 'modified_at'.
             direction (string): Defines the direction in which search results are ordered. This API
         defaults to returning items in descending (`DESC`) order unless this
-        parameter is explicitly specified. When results are sorted by `relevance` the ordering is locked to returning
+        parameter is explicitly specified.
+
+        When results are sorted by `relevance` the ordering is locked to returning
         items in descending order of relevance, and this parameter is ignored. Example: 'ASC'.
             limit (integer): Defines the maximum number of items to return as part of a page of
         results. Example: '100'.
             include_recent_shared_links (boolean): Defines whether the search results should include any items
-        that the user recently accessed through a shared link. When this parameter has been set to true,
+        that the user recently accessed through a shared link.
+
+        When this parameter has been set to true,
         the format of the response of this API changes to return
         a list of [Search Results with
         Shared Links](r://search_results_with_shared_links) Example: 'True'.
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
             deleted_user_ids (array): Limits the search results to items that were deleted by the given
-        list of users, defined as a list of comma separated user IDs. The `trash_content` parameter needs to be set to `trashed_only`. If searching in trash is not performed, an empty result set
+        list of users, defined as a list of comma separated user IDs.
+
+        The `trash_content` parameter needs to be set to `trashed_only`.
+
+        If searching in trash is not performed, an empty result set
         is returned. The items need to be owned or shared with
         the currently authenticated user for them to show up in the search
-        results. If the user does not have access to any files owned by
-        any of the users, an empty result set is returned. Data available from 2023-02-01 onwards. Example: "['123422', '23532', '3241212']".
+        results.
+
+        If the user does not have access to any files owned by
+        any of the users, an empty result set is returned.
+
+        Data available from 2023-02-01 onwards. Example: "['123422', '23532', '3241212']".
             deleted_at_range (array): Limits the search results to any items deleted within a given
-        date range. Date ranges are defined as comma separated RFC3339 timestamps. If the the start date is omitted (`2014-05-17T13:35:01-07:00`),
-        anything deleted before the end date will be returned. If the end date is omitted (`2014-05-15T13:35:01-07:00`),
-        the current date will be used as the end date instead. The `trash_content` parameter needs to be set to `trashed_only`. If searching in trash is not performed, then an empty result
-        is returned. Data available from 2023-02-01 onwards. Example: "['2014-05-15T13:35:01-07:00', '2014-05-17T13:35:01-07:00']".
+        date range.
+
+        Date ranges are defined as comma separated RFC3339 timestamps.
+
+        If the the start date is omitted (`2014-05-17T13:35:01-07:00`),
+        anything deleted before the end date will be returned.
+
+        If the end date is omitted (`2014-05-15T13:35:01-07:00`),
+        the current date will be used as the end date instead.
+
+        The `trash_content` parameter needs to be set to `trashed_only`.
+
+        If searching in trash is not performed, then an empty result
+        is returned.
+
+        Data available from 2023-02-01 onwards. Example: "['2014-05-15T13:35:01-07:00', '2014-05-17T13:35:01-07:00']".
 
         Returns:
             Any: Returns a collection of search results. If there are no matching
         search results, the `entries` array will be empty.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Search
@@ -3092,11 +4891,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('query', query), ('scope', scope), ('file_extensions', file_extensions), ('created_at_range', created_at_range), ('updated_at_range', updated_at_range), ('size_range', size_range), ('owner_user_ids', owner_user_ids), ('recent_updater_user_ids', recent_updater_user_ids), ('ancestor_folder_ids', ancestor_folder_ids), ('content_types', content_types), ('type', type), ('trash_content', trash_content), ('mdfilters', mdfilters), ('sort', sort), ('direction', direction), ('limit', limit), ('include_recent_shared_links', include_recent_shared_links), ('fields', fields), ('offset', offset), ('deleted_user_ids', deleted_user_ids), ('deleted_at_range', deleted_at_range)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_tasks(self, item=None, action=None, message=None, due_at=None, completion_rule=None) -> dict[str, Any]:
+    def post_tasks(self, item: Optional[dict[str, Any]] = None, action: Optional[str] = None, message: Optional[str] = None, due_at: Optional[str] = None, completion_rule: Optional[str] = None) -> dict[str, Any]:
         """
-        Creates a new task and returns relevant details about the created task.
+        Create task
 
         Args:
             item (object): The file to attach the task to.
@@ -3119,26 +4923,36 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the newly created task.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Tasks
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'item': item,
             'action': action,
             'message': message,
             'due_at': due_at,
             'completion_rule': completion_rule,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/tasks"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_tasks_id(self, task_id) -> dict[str, Any]:
+    def get_tasks_id(self, task_id: str) -> dict[str, Any]:
         """
-        Retrieves a specific task identified by `{task_id}` using the GET method from the path "/tasks/{task_id}".
+        Get task
 
         Args:
             task_id (string): task_id
@@ -3146,20 +4960,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a task object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Tasks
         """
         if task_id is None:
-            raise ValueError("Missing required parameter 'task_id'")
+            raise ValueError("Missing required parameter 'task_id'.")
         url = f"{self.base_url}/tasks/{task_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_tasks_id(self, task_id, action=None, message=None, due_at=None, completion_rule=None) -> dict[str, Any]:
+    def put_tasks_id(self, task_id: str, action: Optional[str] = None, message: Optional[str] = None, due_at: Optional[str] = None, completion_rule: Optional[str] = None) -> dict[str, Any]:
         """
-        Replaces or updates an existing task with the provided data for the specified task_id.
+        Update task
 
         Args:
             task_id (string): task_id
@@ -3181,27 +5004,37 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the updated task object
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Tasks
         """
         if task_id is None:
-            raise ValueError("Missing required parameter 'task_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'task_id'.")
+        request_body_data = None
+        request_body_data = {
             'action': action,
             'message': message,
             'due_at': due_at,
             'completion_rule': completion_rule,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/tasks/{task_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_tasks_id(self, task_id) -> Any:
+    def delete_tasks_id(self, task_id: str) -> Any:
         """
-        Deletes a task with the specified `task_id` using the HTTP DELETE method.
+        Remove task
 
         Args:
             task_id (string): task_id
@@ -3209,20 +5042,29 @@ class BoxApp(APIApplication):
         Returns:
             Any: Returns an empty response when the task was successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Tasks
         """
         if task_id is None:
-            raise ValueError("Missing required parameter 'task_id'")
+            raise ValueError("Missing required parameter 'task_id'.")
         url = f"{self.base_url}/tasks/{task_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_tasks_id_assignments(self, task_id) -> dict[str, Any]:
+    def get_tasks_id_assignments(self, task_id: str) -> dict[str, Any]:
         """
-        Retrieves the assignments for a specific task identified by the "{task_id}" using the GET method.
+        List task assignments
 
         Args:
             task_id (string): task_id
@@ -3231,20 +5073,29 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a collection of task assignment defining what task on
         a file has been assigned to which users and by who.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Task assignments
         """
         if task_id is None:
-            raise ValueError("Missing required parameter 'task_id'")
+            raise ValueError("Missing required parameter 'task_id'.")
         url = f"{self.base_url}/tasks/{task_id}/assignments"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_task_assignments(self, task=None, assign_to=None) -> dict[str, Any]:
+    def post_task_assignments(self, task: Optional[dict[str, Any]] = None, assign_to: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Creates a new task assignment and returns a task assignment object with a successful creation status.
+        Assign task
 
         Args:
             task (object): The task to assign to a user.
@@ -3253,23 +5104,33 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new task assignment object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Task assignments
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'task': task,
             'assign_to': assign_to,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/task_assignments"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_task_assignments_id(self, task_assignment_id) -> dict[str, Any]:
+    def get_task_assignments_id(self, task_assignment_id: str) -> dict[str, Any]:
         """
-        Retrieves a specific task assignment by its ID using the GET method, returning details about the assignment if found, or an error if it does not exist.
+        Get task assignment
 
         Args:
             task_assignment_id (string): task_assignment_id
@@ -3278,20 +5139,29 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a task assignment, specifying who the task has been assigned to
         and by whom.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Task assignments
         """
         if task_assignment_id is None:
-            raise ValueError("Missing required parameter 'task_assignment_id'")
+            raise ValueError("Missing required parameter 'task_assignment_id'.")
         url = f"{self.base_url}/task_assignments/{task_assignment_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_task_assignments_id(self, task_assignment_id, message=None, resolution_state=None) -> dict[str, Any]:
+    def put_task_assignments_id(self, task_assignment_id: str, message: Optional[str] = None, resolution_state: Optional[str] = None) -> dict[str, Any]:
         """
-        Updates a task assignment with the specified ID using the PUT method.
+        Update task assignment
 
         Args:
             task_assignment_id (string): task_assignment_id
@@ -3306,25 +5176,35 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the updated task assignment object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Task assignments
         """
         if task_assignment_id is None:
-            raise ValueError("Missing required parameter 'task_assignment_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'task_assignment_id'.")
+        request_body_data = None
+        request_body_data = {
             'message': message,
             'resolution_state': resolution_state,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/task_assignments/{task_assignment_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_task_assignments_id(self, task_assignment_id) -> Any:
+    def delete_task_assignments_id(self, task_assignment_id: str) -> Any:
         """
-        Deletes a task assignment by ID using the "DELETE" method, provided that the task assignment has no associated time entries.
+        Unassign task
 
         Args:
             task_assignment_id (string): task_assignment_id
@@ -3333,25 +5213,36 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the task
         assignment was successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Task assignments
         """
         if task_assignment_id is None:
-            raise ValueError("Missing required parameter 'task_assignment_id'")
+            raise ValueError("Missing required parameter 'task_assignment_id'.")
         url = f"{self.base_url}/task_assignments/{task_assignment_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_shared_items(self, fields=None) -> dict[str, Any]:
+    def get_shared_items(self, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves information about shared items using a shared link via the Box API, allowing for optional specification of fields to include in the response.
+        Find file for shared link
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -3361,6 +5252,10 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a full file resource if the shared link is valid and
         the user has access to it.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Files)
         """
@@ -3368,11 +5263,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_files_id_get_shared_link(self, file_id, fields) -> dict[str, Any]:
+    def get_files_id_get_shared_link(self, file_id: str, fields: str) -> dict[str, Any]:
         """
-        Retrieves a shared link for a specific file identified by its ID using the "GET" method.
+        Get shared link for file
 
         Args:
             file_id (string): file_id
@@ -3383,20 +5283,29 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the base representation of a file with the
         additional shared link information.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Files)
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
+            raise ValueError("Missing required parameter 'file_id'.")
         url = f"{self.base_url}/files/{file_id}#get_shared_link"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_files_id_add_shared_link(self, file_id, fields, shared_link=None) -> dict[str, Any]:
+    def put_files_id_add_shared_link(self, file_id: str, fields: str, shared_link: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Generates a shared link for a specific file identified by `file_id`, optionally retrieving specified fields, using the PUT method at the path "/files/{file_id}#add_shared_link".
+        Add shared link to file
 
         Args:
             file_id (string): file_id
@@ -3410,24 +5319,34 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the base representation of a file with a new shared
         link attached.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Files)
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'file_id'.")
+        request_body_data = None
+        request_body_data = {
             'shared_link': shared_link,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/{file_id}#add_shared_link"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_files_id_update_shared_link(self, file_id, fields, shared_link=None) -> dict[str, Any]:
+    def update_file_shared_link(self, file_id: str, fields: str, shared_link: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Updates the shared link settings for a specific file using the PUT method, allowing modifications to access permissions and other link properties for the file identified by the file_id parameter.
+        Update shared link on file
 
         Args:
             file_id (string): file_id
@@ -3439,24 +5358,34 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a basic representation of the file, with the updated shared
         link attached.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Files)
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'file_id'.")
+        request_body_data = None
+        request_body_data = {
             'shared_link': shared_link,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/{file_id}#update_shared_link"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_files_id_remove_shared_link(self, file_id, fields, shared_link=None) -> dict[str, Any]:
+    def remove_shared_link_by_id(self, file_id: str, fields: str, shared_link: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Removes a shared link from a file using the Box API by setting the `shared_link` field to `null` via a PUT request to the specified file ID endpoint.
+        Remove shared link from file
 
         Args:
             file_id (string): file_id
@@ -3468,29 +5397,41 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a basic representation of a file, with the shared link removed.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Files)
         """
         if file_id is None:
-            raise ValueError("Missing required parameter 'file_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'file_id'.")
+        request_body_data = None
+        request_body_data = {
             'shared_link': shared_link,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/files/{file_id}#remove_shared_link"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_shared_items_folders(self, fields=None) -> dict[str, Any]:
+    def get_shared_items_folders(self, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves a list of shared folder items using the Box API, with optional filtering by specified fields, and returns them in a formatted response.
+        Find folder for shared link
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -3500,6 +5441,10 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a full folder resource if the shared link is valid and
         the user has access to it.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Folders)
         """
@@ -3507,11 +5452,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_folders_id_get_shared_link(self, folder_id, fields) -> dict[str, Any]:
+    def get_folders_id_get_shared_link(self, folder_id: str, fields: str) -> dict[str, Any]:
         """
-        Generates a shared link for a specific folder identified by the `{folder_id}` using the GET method, returning the link in the response.
+        Get shared link for folder
 
         Args:
             folder_id (string): folder_id
@@ -3522,20 +5472,29 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the base representation of a folder with the
         additional shared link information.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Folders)
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
+            raise ValueError("Missing required parameter 'folder_id'.")
         url = f"{self.base_url}/folders/{folder_id}#get_shared_link"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_folders_id_add_shared_link(self, folder_id, fields, shared_link=None) -> dict[str, Any]:
+    def put_folders_id_add_shared_link(self, folder_id: str, fields: str, shared_link: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Adds a shared link to a folder using the "PUT" method by specifying the folder ID in the URL and optionally customizing the response fields via query parameters.
+        Add shared link to folder
 
         Args:
             folder_id (string): folder_id
@@ -3550,24 +5509,34 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the base representation of a folder with a new shared
         link attached.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Folders)
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'folder_id'.")
+        request_body_data = None
+        request_body_data = {
             'shared_link': shared_link,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/folders/{folder_id}#add_shared_link"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_folders_id_update_shared_link(self, folder_id, fields, shared_link=None) -> dict[str, Any]:
+    def update_shared_linkfolder(self, folder_id: str, fields: str, shared_link: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Updates the shared link settings for a specified folder using the "PUT" method, returning a representation of the folder with the updated shared link.
+        Update shared link on folder
 
         Args:
             folder_id (string): folder_id
@@ -3579,24 +5548,34 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a basic representation of the folder, with the updated shared
         link attached.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Folders)
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'folder_id'.")
+        request_body_data = None
+        request_body_data = {
             'shared_link': shared_link,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/folders/{folder_id}#update_shared_link"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_folders_id_remove_shared_link(self, folder_id, fields, shared_link=None) -> dict[str, Any]:
+    def remove_shared_link_by_folder_id(self, folder_id: str, fields: str, shared_link: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Removes a shared link from a specified folder using the Box API and returns a basic representation of the folder.
+        Remove shared link from folder
 
         Args:
             folder_id (string): folder_id
@@ -3608,24 +5587,34 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a basic representation of a folder, with the shared link removed.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Folders)
         """
         if folder_id is None:
-            raise ValueError("Missing required parameter 'folder_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'folder_id'.")
+        request_body_data = None
+        request_body_data = {
             'shared_link': shared_link,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/folders/{folder_id}#remove_shared_link"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_web_links(self, url=None, parent=None, name=None, description=None) -> dict[str, Any]:
+    def post_web_links(self, url: Optional[str] = None, parent: Optional[dict[str, Any]] = None, name: Optional[str] = None, description: Optional[str] = None) -> dict[str, Any]:
         """
-        Submits a new web link to the server using the POST method at the "/web_links" path and returns a status message.
+        Create web link
 
         Args:
             url (string): The URL that this web link links to. Must start with
@@ -3637,25 +5626,35 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the newly created web link object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Web links
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'url': url,
             'parent': parent,
             'name': name,
             'description': description,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/web_links"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_web_links_id(self, web_link_id) -> dict[str, Any]:
+    def get_web_links_id(self, web_link_id: str) -> dict[str, Any]:
         """
-        Retrieves information about a specific web link using its ID, identified by the path "/web_links/{web_link_id}", via a GET request.
+        Get web link
 
         Args:
             web_link_id (string): web_link_id
@@ -3663,26 +5662,37 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the web link object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Web links
         """
         if web_link_id is None:
-            raise ValueError("Missing required parameter 'web_link_id'")
+            raise ValueError("Missing required parameter 'web_link_id'.")
         url = f"{self.base_url}/web_links/{web_link_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_web_links_id(self, web_link_id, fields=None, name=None, parent=None) -> dict[str, Any]:
+    def post_web_links_id(self, web_link_id: str, fields: Optional[List[str]] = None, name: Optional[str] = None, parent: Optional[Any] = None) -> dict[str, Any]:
         """
-        Creates a new resource associated with a specific web link identified by `{web_link_id}` and returns a status message, optionally including specified fields.
+        Restore web link
 
         Args:
             web_link_id (string): web_link_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -3693,25 +5703,35 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a web link object when it has been restored.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Trashed web links
         """
         if web_link_id is None:
-            raise ValueError("Missing required parameter 'web_link_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'web_link_id'.")
+        request_body_data = None
+        request_body_data = {
             'name': name,
             'parent': parent,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/web_links/{web_link_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_web_links_id(self, web_link_id, url=None, parent=None, name=None, description=None, shared_link=None) -> dict[str, Any]:
+    def put_web_links_id(self, web_link_id: str, url: Optional[str] = None, parent: Optional[Any] = None, name: Optional[str] = None, description: Optional[str] = None, shared_link: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Updates a web link resource identified by the `web_link_id` using the HTTP PUT method.
+        Update web link
 
         Args:
             web_link_id (string): web_link_id
@@ -3725,28 +5745,38 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the updated web link object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Web links
         """
         if web_link_id is None:
-            raise ValueError("Missing required parameter 'web_link_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'web_link_id'.")
+        request_body_data = None
+        request_body_data = {
             'url': url,
             'parent': parent,
             'name': name,
             'description': description,
             'shared_link': shared_link,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/web_links/{web_link_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_web_links_id(self, web_link_id) -> Any:
+    def delete_web_links_id(self, web_link_id: str) -> Any:
         """
-        Deletes a web link resource identified by its ID from the system using the DELETE method.
+        Remove web link
 
         Args:
             web_link_id (string): web_link_id
@@ -3755,26 +5785,37 @@ class BoxApp(APIApplication):
             Any: An empty response will be returned when the web link
         was successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Web links
         """
         if web_link_id is None:
-            raise ValueError("Missing required parameter 'web_link_id'")
+            raise ValueError("Missing required parameter 'web_link_id'.")
         url = f"{self.base_url}/web_links/{web_link_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_web_links_id_trash(self, web_link_id, fields=None) -> dict[str, Any]:
+    def get_web_links_id_trash(self, web_link_id: str, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves information about a trashed web link by its ID, allowing for optional specification of fields to include in the response.
+        Get trashed web link
 
         Args:
             web_link_id (string): web_link_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -3785,20 +5826,29 @@ class BoxApp(APIApplication):
         including information about when the it
         was moved to the trash.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Trashed web links
         """
         if web_link_id is None:
-            raise ValueError("Missing required parameter 'web_link_id'")
+            raise ValueError("Missing required parameter 'web_link_id'.")
         url = f"{self.base_url}/web_links/{web_link_id}/trash"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_web_links_id_trash(self, web_link_id) -> Any:
+    def delete_web_links_id_trash(self, web_link_id: str) -> Any:
         """
-        Deletes a web link by moving it to the trash using the provided web link ID.
+        Permanently remove web link
 
         Args:
             web_link_id (string): web_link_id
@@ -3807,25 +5857,36 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the web link was
         permanently deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Trashed web links
         """
         if web_link_id is None:
-            raise ValueError("Missing required parameter 'web_link_id'")
+            raise ValueError("Missing required parameter 'web_link_id'.")
         url = f"{self.base_url}/web_links/{web_link_id}/trash"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_shared_items_web_links(self, fields=None) -> dict[str, Any]:
+    def get_shared_items_web_links(self, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves a list of web links for shared items using the GET method at the "/shared_items#web_links" endpoint.
+        Find web link for shared link
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -3835,6 +5896,10 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a full web link resource if the shared link is valid and
         the user has access to it.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Web Links)
         """
@@ -3842,11 +5907,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_web_links_id_get_shared_link(self, web_link_id, fields) -> dict[str, Any]:
+    def get_shared_link_by_id(self, web_link_id: str, fields: str) -> dict[str, Any]:
         """
-        Retrieves details of a shared web link using its unique identifier and optional field selection parameters.
+        Get shared link for web link
 
         Args:
             web_link_id (string): web_link_id
@@ -3857,20 +5927,29 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the base representation of a web link with the
         additional shared link information.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Web Links)
         """
         if web_link_id is None:
-            raise ValueError("Missing required parameter 'web_link_id'")
+            raise ValueError("Missing required parameter 'web_link_id'.")
         url = f"{self.base_url}/web_links/{web_link_id}#get_shared_link"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_web_links_id_add_shared_link(self, web_link_id, fields, shared_link=None) -> dict[str, Any]:
+    def update_web_link_shared_link(self, web_link_id: str, fields: str, shared_link: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Adds a shared link to a specified web link, allowing it to be accessed and shared by others, using the Box API.
+        Add shared link to web link
 
         Args:
             web_link_id (string): web_link_id
@@ -3885,24 +5964,34 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the base representation of a web link with a new shared
         link attached.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Web Links)
         """
         if web_link_id is None:
-            raise ValueError("Missing required parameter 'web_link_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'web_link_id'.")
+        request_body_data = None
+        request_body_data = {
             'shared_link': shared_link,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/web_links/{web_link_id}#add_shared_link"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_web_links_id_update_shared_link(self, web_link_id, fields, shared_link=None) -> dict[str, Any]:
+    def update_shared_link(self, web_link_id: str, fields: str, shared_link: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Updates a shared link for a web link identified by the `{web_link_id}` and optionally specifies fields to include in the response using the `fields` query parameter.
+        Update shared link on web link
 
         Args:
             web_link_id (string): web_link_id
@@ -3914,24 +6003,34 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a basic representation of the web link, with the updated shared
         link attached.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Web Links)
         """
         if web_link_id is None:
-            raise ValueError("Missing required parameter 'web_link_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'web_link_id'.")
+        request_body_data = None
+        request_body_data = {
             'shared_link': shared_link,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/web_links/{web_link_id}#update_shared_link"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_web_links_id_remove_shared_link(self, web_link_id, fields, shared_link=None) -> dict[str, Any]:
+    def remove_shared_link_by_web_link_id(self, web_link_id: str, fields: str, shared_link: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Removes a shared link from a web link resource using the `PUT` method by setting the shared link to null for the specified `web_link_id`.
+        Remove shared link from web link
 
         Args:
             web_link_id (string): web_link_id
@@ -3944,28 +6043,42 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a basic representation of a web link, with the
         shared link removed.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shared links (Web Links)
         """
         if web_link_id is None:
-            raise ValueError("Missing required parameter 'web_link_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'web_link_id'.")
+        request_body_data = None
+        request_body_data = {
             'shared_link': shared_link,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/web_links/{web_link_id}#remove_shared_link"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
     def get_shared_items_app_items(self) -> dict[str, Any]:
         """
-        Retrieves information about a shared file or folder using a shared link provided in the `boxapi` header.
+        Find app item for shared link
 
         Returns:
             dict[str, Any]: Returns a full app item resource if the shared link is valid and
         the user has access to it.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Shared links (App Items)
@@ -3974,46 +6087,76 @@ class BoxApp(APIApplication):
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_users(self, filter_term=None, user_type=None, external_app_user_id=None, fields=None, offset=None, limit=None, usemarker=None, marker=None) -> dict[str, Any]:
+    def get_users(self, filter_term: Optional[str] = None, user_type: Optional[str] = None, external_app_user_id: Optional[str] = None, fields: Optional[List[str]] = None, offset: Optional[int] = None, limit: Optional[int] = None, usemarker: Optional[bool] = None, marker: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a filtered or paginated list of users, supporting optional query parameters for filtering, field selection, and result pagination.
+        List enterprise users
 
         Args:
             filter_term (string): Limits the results to only users who's `name` or
-        `login` start with the search term. For externally managed users, the search term needs
+        `login` start with the search term.
+
+        For externally managed users, the search term needs
         to completely match the in order to find the user, and
         it will only return one user at a time. Example: 'john'.
-            user_type (string): Limits the results to the kind of user specified. * `all` returns every kind of user for whom the `login` or `name` partially matches the `filter_term`. It will only return an external user if the login matches the `filter_term` completely, and in that case it will only return that user.
-        * `managed` returns all managed and app users for whom the `login` or `name` partially matches the `filter_term`.
-        * `external` returns all external users for whom the `login` matches the `filter_term` exactly. Example: 'managed'.
+            user_type (string): Limits the results to the kind of user specified.
+
+        * `all` returns every kind of user for whom the
+          `login` or `name` partially matches the
+          `filter_term`. It will only return an external user
+          if the login matches the `filter_term` completely,
+          and in that case it will only return that user.
+        * `managed` returns all managed and app users for whom
+          the `login` or `name` partially matches the
+          `filter_term`.
+        * `external` returns all external users for whom the
+          `login` matches the `filter_term` exactly. Example: 'managed'.
             external_app_user_id (string): Limits the results to app users with the given
-        `external_app_user_id` value. When creating an app user, an
+        `external_app_user_id` value.
+
+        When creating an app user, an
         `external_app_user_id` value can be set. This value can
         then be used in this endpoint to find any users that
         match that `external_app_user_id` value. Example: 'my-user-1234'.
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             usemarker (boolean): Specifies whether to use marker-based pagination instead of
         offset-based pagination. Only one pagination method can
-        be used at a time. By setting this value to true, the API will return a `marker` field
+        be used at a time.
+
+        By setting this value to true, the API will return a `marker` field
         that can be passed as a parameter to this endpoint to get the next
         page of the response. Example: 'True'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
 
         Returns:
             dict[str, Any]: Returns all of the users in the enterprise.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Users
@@ -4022,16 +6165,23 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('filter_term', filter_term), ('user_type', user_type), ('external_app_user_id', external_app_user_id), ('fields', fields), ('offset', offset), ('limit', limit), ('usemarker', usemarker), ('marker', marker)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_users(self, fields=None, name=None, login=None, is_platform_access_only=None, role=None, language=None, is_sync_enabled=None, job_title=None, phone=None, address=None, space_amount=None, tracking_codes=None, can_see_managed_users=None, timezone=None, is_external_collab_restricted=None, is_exempt_from_device_limits=None, is_exempt_from_login_verification=None, status=None, external_app_user_id=None) -> dict[str, Any]:
+    def post_users(self, fields: Optional[List[str]] = None, name: Optional[str] = None, login: Optional[str] = None, is_platform_access_only: Optional[bool] = None, role: Optional[str] = None, language: Optional[str] = None, is_sync_enabled: Optional[bool] = None, job_title: Optional[str] = None, phone: Optional[str] = None, address: Optional[str] = None, space_amount: Optional[int] = None, tracking_codes: Optional[List[dict[str, Any]]] = None, can_see_managed_users: Optional[bool] = None, timezone: Optional[str] = None, is_external_collab_restricted: Optional[bool] = None, is_exempt_from_device_limits: Optional[bool] = None, is_exempt_from_login_verification: Optional[bool] = None, status: Optional[str] = None, external_app_user_id: Optional[str] = None) -> dict[str, Any]:
         """
-        Creates a new user in the system using the "POST" method at the "/users" endpoint, allowing for dynamic management of user accounts.
+        Create user
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -4070,10 +6220,15 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a user object for the newly created user.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Users
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'name': name,
             'login': login,
             'is_platform_access_only': is_platform_access_only,
@@ -4093,21 +6248,28 @@ class BoxApp(APIApplication):
             'status': status,
             'external_app_user_id': external_app_user_id,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/users"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_users_me(self, fields=None) -> dict[str, Any]:
+    def get_users_me(self, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves the current authenticated user's profile and allows filtering the response fields with an optional query parameter.
+        Get current user
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -4116,6 +6278,10 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a single user object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Users
         """
@@ -4123,11 +6289,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_users_terminate_sessions(self, user_ids=None, user_logins=None) -> dict[str, Any]:
+    def post_users_terminate_sessions(self, user_ids: Optional[List[str]] = None, user_logins: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Terminates a user's active sessions by creating asynchronous jobs and returns the request status.
+        Create jobs to terminate users session
 
         Args:
             user_ids (array): A list of user IDs Example: "['123456', '456789']".
@@ -4136,29 +6307,41 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a message about the request status.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Session termination
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'user_ids': user_ids,
             'user_logins': user_logins,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/users/terminate_sessions"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_users_id(self, user_id, fields=None) -> dict[str, Any]:
+    def get_users_id(self, user_id: str, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves details for a specific user identified by user_id, optionally filtering the returned fields.
+        Get user
 
         Args:
             user_id (string): user_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -4172,26 +6355,37 @@ class BoxApp(APIApplication):
         any specific fields using the [fields](#get-users-id--request--fields)
         parameter.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Users
         """
         if user_id is None:
-            raise ValueError("Missing required parameter 'user_id'")
+            raise ValueError("Missing required parameter 'user_id'.")
         url = f"{self.base_url}/users/{user_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_users_id(self, user_id, fields=None, enterprise=None, notify=None, name=None, login=None, role=None, language=None, is_sync_enabled=None, job_title=None, phone=None, address=None, tracking_codes=None, can_see_managed_users=None, timezone=None, is_external_collab_restricted=None, is_exempt_from_device_limits=None, is_exempt_from_login_verification=None, is_password_reset_required=None, status=None, space_amount=None, notification_email=None, external_app_user_id=None) -> dict[str, Any]:
+    def put_users_id(self, user_id: str, fields: Optional[List[str]] = None, enterprise: Optional[str] = None, notify: Optional[bool] = None, name: Optional[str] = None, login: Optional[str] = None, role: Optional[str] = None, language: Optional[str] = None, is_sync_enabled: Optional[bool] = None, job_title: Optional[str] = None, phone: Optional[str] = None, address: Optional[str] = None, tracking_codes: Optional[List[dict[str, Any]]] = None, can_see_managed_users: Optional[bool] = None, timezone: Optional[str] = None, is_external_collab_restricted: Optional[bool] = None, is_exempt_from_device_limits: Optional[bool] = None, is_exempt_from_login_verification: Optional[bool] = None, is_password_reset_required: Optional[bool] = None, status: Optional[str] = None, space_amount: Optional[int] = None, notification_email: Optional[dict[str, Any]] = None, external_app_user_id: Optional[str] = None) -> dict[str, Any]:
         """
-        Updates or replaces the details of a user identified by the provided user_id.
+        Update user
 
         Args:
             user_id (string): user_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -4243,12 +6437,17 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the updated user object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Users
         """
         if user_id is None:
-            raise ValueError("Missing required parameter 'user_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'user_id'.")
+        request_body_data = None
+        request_body_data = {
             'enterprise': enterprise,
             'notify': notify,
             'name': name,
@@ -4271,16 +6470,21 @@ class BoxApp(APIApplication):
             'notification_email': notification_email,
             'external_app_user_id': external_app_user_id,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/users/{user_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_users_id(self, user_id, notify=None, force=None) -> Any:
+    def delete_users_id(self, user_id: str, notify: Optional[bool] = None, force: Optional[bool] = None) -> Any:
         """
-        Deletes a user by user ID, optionally notifying or forcing the deletion, and returns a successful status if the operation is completed.
+        Delete user
 
         Args:
             user_id (string): user_id
@@ -4292,20 +6496,29 @@ class BoxApp(APIApplication):
         Returns:
             Any: Removes the user and returns an empty response.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Users
         """
         if user_id is None:
-            raise ValueError("Missing required parameter 'user_id'")
+            raise ValueError("Missing required parameter 'user_id'.")
         url = f"{self.base_url}/users/{user_id}"
         query_params = {k: v for k, v in [('notify', notify), ('force', force)] if v is not None}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_users_id_avatar(self, user_id) -> Any:
+    def get_users_id_avatar(self, user_id: str) -> Any:
         """
-        Retrieves the avatar image for the specified user.
+        Get user avatar
 
         Args:
             user_id (string): user_id
@@ -4315,21 +6528,71 @@ class BoxApp(APIApplication):
         image data will be returned in the body of the
         response.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             User avatars
         """
         if user_id is None:
-            raise ValueError("Missing required parameter 'user_id'")
+            raise ValueError("Missing required parameter 'user_id'.")
         url = f"{self.base_url}/users/{user_id}/avatar"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-
-    def delete_users_id_avatar(self, user_id) -> Any:
+    def post_users_id_avatar(self, user_id: str, pic: Optional[bytes] = None) -> dict[str, Any]:
         """
-        Removes the avatar image associated with the specified user.
+        Add or update user avatar
+
+        Args:
+            user_id (string): user_id
+            pic (file (e.g., open('path/to/file', 'rb'))): The image file to be uploaded to Box.
+        Accepted file extensions are `.jpg` or `.png`.
+        The maximum file size is 1MB.
+
+        Returns:
+            dict[str, Any]: * `ok`: Returns the `pic_urls` object with URLs to existing
+        user avatars that were updated.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            User avatars
+        """
+        if user_id is None:
+            raise ValueError("Missing required parameter 'user_id'.")
+        request_body_data = None
+        files_data = None
+        request_body_data = {}
+        files_data = {}
+        if pic is not None:
+            files_data['pic'] = pic
+        files_data = {k: v for k, v in files_data.items() if v is not None}
+        if not files_data: files_data = None
+        url = f"{self.base_url}/users/{user_id}/avatar"
+        query_params = {}
+        response = self._post(url, data=request_body_data, files=files_data, params=query_params, content_type='multipart/form-data')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def delete_users_id_avatar(self, user_id: str) -> Any:
+        """
+        Delete user avatar
 
         Args:
             user_id (string): user_id
@@ -4337,26 +6600,37 @@ class BoxApp(APIApplication):
         Returns:
             Any: * `no_content`: Removes the avatar and returns an empty response.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             User avatars
         """
         if user_id is None:
-            raise ValueError("Missing required parameter 'user_id'")
+            raise ValueError("Missing required parameter 'user_id'.")
         url = f"{self.base_url}/users/{user_id}/avatar"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_users_id_folders_0(self, user_id, fields=None, notify=None, owned_by=None) -> dict[str, Any]:
+    def put_users_id_folders(self, user_id: str, fields: Optional[List[str]] = None, notify: Optional[bool] = None, owned_by: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Updates the details of the root folder (folder ID 0) for a specified user, optionally specifying fields to return and notification preferences.
+        Transfer owned folders
 
         Args:
             user_id (string): user_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -4369,24 +6643,34 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the information for the newly created
         destination folder.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Transfer folders
         """
         if user_id is None:
-            raise ValueError("Missing required parameter 'user_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'user_id'.")
+        request_body_data = None
+        request_body_data = {
             'owned_by': owned_by,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/users/{user_id}/folders/0"
         query_params = {k: v for k, v in [('fields', fields), ('notify', notify)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_users_id_email_aliases(self, user_id) -> dict[str, Any]:
+    def get_users_id_email_aliases(self, user_id: str) -> dict[str, Any]:
         """
-        Retrieves a list of email aliases for a specific user using the "GET" method, identified by their unique user ID.
+        List user's email aliases
 
         Args:
             user_id (string): user_id
@@ -4394,20 +6678,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a collection of email aliases.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Email aliases
         """
         if user_id is None:
-            raise ValueError("Missing required parameter 'user_id'")
+            raise ValueError("Missing required parameter 'user_id'.")
         url = f"{self.base_url}/users/{user_id}/email_aliases"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_users_id_email_aliases(self, user_id, email=None) -> dict[str, Any]:
+    def post_users_id_email_aliases(self, user_id: str, email: Optional[str] = None) -> dict[str, Any]:
         """
-        Creates new email aliases for a specified user using the API endpoint at "/users/{user_id}/email_aliases".
+        Create email alias
 
         Args:
             user_id (string): user_id
@@ -4422,24 +6715,34 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the newly created email alias object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Email aliases
         """
         if user_id is None:
-            raise ValueError("Missing required parameter 'user_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'user_id'.")
+        request_body_data = None
+        request_body_data = {
             'email': email,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/users/{user_id}/email_aliases"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_users_id_email_aliases_id(self, user_id, email_alias_id) -> Any:
+    def delete_email_alias_by_id(self, user_id: str, email_alias_id: str) -> Any:
         """
-        Deletes an email alias associated with a specific user, identified by the user ID and email alias ID, using the DELETE method.
+        Remove email alias
 
         Args:
             user_id (string): user_id
@@ -4448,27 +6751,38 @@ class BoxApp(APIApplication):
         Returns:
             Any: Removes the alias and returns an empty response.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Email aliases
         """
         if user_id is None:
-            raise ValueError("Missing required parameter 'user_id'")
+            raise ValueError("Missing required parameter 'user_id'.")
         if email_alias_id is None:
-            raise ValueError("Missing required parameter 'email_alias_id'")
+            raise ValueError("Missing required parameter 'email_alias_id'.")
         url = f"{self.base_url}/users/{user_id}/email_aliases/{email_alias_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_users_id_memberships(self, user_id, limit=None, offset=None) -> dict[str, Any]:
+    def get_users_id_memberships(self, user_id: str, limit: Optional[int] = None, offset: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a paginated list of memberships associated with a specified user by user ID.
+        List user's groups
 
         Args:
             user_id (string): user_id
             limit (integer): The maximum number of items to return per page. Example: '1000'.
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
 
@@ -4476,25 +6790,36 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a collection of membership objects. If there are no
         memberships, an empty collection will be returned.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Group memberships
         """
         if user_id is None:
-            raise ValueError("Missing required parameter 'user_id'")
+            raise ValueError("Missing required parameter 'user_id'.")
         url = f"{self.base_url}/users/{user_id}/memberships"
         query_params = {k: v for k, v in [('limit', limit), ('offset', offset)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_invites(self, fields=None, enterprise=None, actionable_by=None) -> dict[str, Any]:
+    def post_invites(self, fields: Optional[List[str]] = None, enterprise: Optional[dict[str, Any]] = None, actionable_by: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Creates a new invite by sending a POST request to the /invites endpoint, optionally specifying fields to include in the response.
+        Create user invite
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -4505,29 +6830,41 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new invite object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Invites
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'enterprise': enterprise,
             'actionable_by': actionable_by,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/invites"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_invites_id(self, invite_id, fields=None) -> dict[str, Any]:
+    def get_invites_id(self, invite_id: str, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves details about a specific invitation, identified by the `invite_id`, optionally including custom fields specified in the query parameters.
+        Get user invite status
 
         Args:
             invite_id (string): invite_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -4536,39 +6873,56 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns an invite object
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Invites
         """
         if invite_id is None:
-            raise ValueError("Missing required parameter 'invite_id'")
+            raise ValueError("Missing required parameter 'invite_id'.")
         url = f"{self.base_url}/invites/{invite_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_groups(self, filter_term=None, fields=None, limit=None, offset=None) -> dict[str, Any]:
+    def get_groups(self, filter_term: Optional[str] = None, fields: Optional[List[str]] = None, limit: Optional[int] = None, offset: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of groups, optionally filtered and paginated, based on query parameters for filtering, field selection, and result limits.
+        List groups for enterprise
 
         Args:
             filter_term (string): Limits the results to only groups whose `name` starts
         with the search term. Example: 'Engineering'.
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
             limit (integer): The maximum number of items to return per page. Example: '1000'.
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a collection of group objects. If there are no groups, an
         empty collection will be returned.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Groups
@@ -4577,16 +6931,23 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('filter_term', filter_term), ('fields', fields), ('limit', limit), ('offset', offset)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_groups(self, fields=None, name=None, provenance=None, external_sync_identifier=None, description=None, invitability_level=None, member_viewability_level=None) -> dict[str, Any]:
+    def post_groups(self, fields: Optional[List[str]] = None, name: Optional[str] = None, provenance: Optional[str] = None, external_sync_identifier: Optional[str] = None, description: Optional[str] = None, invitability_level: Optional[str] = None, member_viewability_level: Optional[str] = None) -> dict[str, Any]:
         """
-        Creates a new group using the API and returns a status message, with optional filtering by specified fields.
+        Create group
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -4635,10 +6996,15 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the new group object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Groups
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'name': name,
             'provenance': provenance,
             'external_sync_identifier': external_sync_identifier,
@@ -4646,16 +7012,21 @@ class BoxApp(APIApplication):
             'invitability_level': invitability_level,
             'member_viewability_level': member_viewability_level,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/groups"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_groups_terminate_sessions(self, group_ids=None) -> dict[str, Any]:
+    def post_groups_terminate_sessions(self, group_ids: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Terminates active sessions for a specified group using a POST request to the "/groups/terminate_sessions" API endpoint.
+        Create jobs to terminate user group session
 
         Args:
             group_ids (array): A list of group IDs Example: "['123456', '456789']".
@@ -4663,28 +7034,40 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a message about the request status.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Session termination
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'group_ids': group_ids,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/groups/terminate_sessions"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_groups_id(self, group_id, fields=None) -> dict[str, Any]:
+    def get_groups_id(self, group_id: str, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves detailed information about a specific group identified by the group_id, optionally filtering the returned data based on specified fields.
+        Get group
 
         Args:
             group_id (string): group_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -4693,26 +7076,37 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the group object
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Groups
         """
         if group_id is None:
-            raise ValueError("Missing required parameter 'group_id'")
+            raise ValueError("Missing required parameter 'group_id'.")
         url = f"{self.base_url}/groups/{group_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_groups_id(self, group_id, fields=None, name=None, provenance=None, external_sync_identifier=None, description=None, invitability_level=None, member_viewability_level=None) -> dict[str, Any]:
+    def put_groups_id(self, group_id: str, fields: Optional[List[str]] = None, name: Optional[str] = None, provenance: Optional[str] = None, external_sync_identifier: Optional[str] = None, description: Optional[str] = None, invitability_level: Optional[str] = None, member_viewability_level: Optional[str] = None) -> dict[str, Any]:
         """
-        Updates the details of a specific group identified by the group_id path parameter, with optional field selection via the fields query parameter, and returns a status response.
+        Update group
 
         Args:
             group_id (string): group_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -4761,12 +7155,17 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the updated group object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Groups
         """
         if group_id is None:
-            raise ValueError("Missing required parameter 'group_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'group_id'.")
+        request_body_data = None
+        request_body_data = {
             'name': name,
             'provenance': provenance,
             'external_sync_identifier': external_sync_identifier,
@@ -4774,16 +7173,21 @@ class BoxApp(APIApplication):
             'invitability_level': invitability_level,
             'member_viewability_level': member_viewability_level,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/groups/{group_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_groups_id(self, group_id) -> Any:
+    def delete_groups_id(self, group_id: str) -> Any:
         """
-        Deletes the group identified by the specified group ID.
+        Remove group
 
         Args:
             group_id (string): group_id
@@ -4792,25 +7196,36 @@ class BoxApp(APIApplication):
             Any: A blank response is returned if the group was
         successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Groups
         """
         if group_id is None:
-            raise ValueError("Missing required parameter 'group_id'")
+            raise ValueError("Missing required parameter 'group_id'.")
         url = f"{self.base_url}/groups/{group_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_groups_id_memberships(self, group_id, limit=None, offset=None) -> dict[str, Any]:
+    def get_groups_id_memberships(self, group_id: str, limit: Optional[int] = None, offset: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a paginated list of memberships for a specified group by its group_id.
+        List members of group
 
         Args:
             group_id (string): group_id
             limit (integer): The maximum number of items to return per page. Example: '1000'.
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
 
@@ -4818,25 +7233,36 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a collection of membership objects. If there are no
         memberships, an empty collection will be returned.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Group memberships
         """
         if group_id is None:
-            raise ValueError("Missing required parameter 'group_id'")
+            raise ValueError("Missing required parameter 'group_id'.")
         url = f"{self.base_url}/groups/{group_id}/memberships"
         query_params = {k: v for k, v in [('limit', limit), ('offset', offset)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_groups_id_collaborations(self, group_id, limit=None, offset=None) -> dict[str, Any]:
+    def get_groups_id_collaborations(self, group_id: str, limit: Optional[int] = None, offset: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of collaborations for a specified group, supporting pagination with optional limit and offset query parameters.
+        List group collaborations
 
         Args:
             group_id (string): group_id
             limit (integer): The maximum number of items to return per page. Example: '1000'.
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
 
@@ -4844,25 +7270,36 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a collection of collaboration objects. If there are no
         collaborations, an empty collection will be returned.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Collaborations (List)
         """
         if group_id is None:
-            raise ValueError("Missing required parameter 'group_id'")
+            raise ValueError("Missing required parameter 'group_id'.")
         url = f"{self.base_url}/groups/{group_id}/collaborations"
         query_params = {k: v for k, v in [('limit', limit), ('offset', offset)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_group_memberships(self, fields=None, user=None, group=None, role=None, configurable_permissions=None) -> dict[str, Any]:
+    def post_group_memberships(self, fields: Optional[List[str]] = None, user: Optional[dict[str, Any]] = None, group: Optional[dict[str, Any]] = None, role: Optional[str] = None, configurable_permissions: Optional[dict[str, bool]] = None) -> dict[str, Any]:
         """
-        Creates a new group membership by adding an agent or user to a specified group.
+        Add user to group
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -4884,31 +7321,43 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new group membership object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Group memberships
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'user': user,
             'group': group,
             'role': role,
             'configurable_permissions': configurable_permissions,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/group_memberships"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_group_memberships_id(self, group_membership_id, fields=None) -> dict[str, Any]:
+    def get_group_memberships_id(self, group_membership_id: str, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves information about a specific group membership using the Zendesk API, returning details about the specified membership based on the provided `group_membership_id`.
+        Get group membership
 
         Args:
             group_membership_id (string): group_membership_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -4917,26 +7366,37 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the group membership object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Group memberships
         """
         if group_membership_id is None:
-            raise ValueError("Missing required parameter 'group_membership_id'")
+            raise ValueError("Missing required parameter 'group_membership_id'.")
         url = f"{self.base_url}/group_memberships/{group_membership_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_group_memberships_id(self, group_membership_id, fields=None, role=None, configurable_permissions=None) -> dict[str, Any]:
+    def put_group_memberships_id(self, group_membership_id: str, fields: Optional[List[str]] = None, role: Optional[str] = None, configurable_permissions: Optional[dict[str, bool]] = None) -> dict[str, Any]:
         """
-        Updates the details of a specific group membership identified by group_membership_id.
+        Update group membership
 
         Args:
             group_membership_id (string): group_membership_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -4956,25 +7416,35 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new group membership object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Group memberships
         """
         if group_membership_id is None:
-            raise ValueError("Missing required parameter 'group_membership_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'group_membership_id'.")
+        request_body_data = None
+        request_body_data = {
             'role': role,
             'configurable_permissions': configurable_permissions,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/group_memberships/{group_membership_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_group_memberships_id(self, group_membership_id) -> Any:
+    def delete_group_memberships_id(self, group_membership_id: str) -> Any:
         """
-        Deletes a specific group membership identified by group_membership_id, removing the user from the group without returning content.
+        Remove user from group
 
         Args:
             group_membership_id (string): group_membership_id
@@ -4983,28 +7453,43 @@ class BoxApp(APIApplication):
             Any: A blank response is returned if the membership was
         successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Group memberships
         """
         if group_membership_id is None:
-            raise ValueError("Missing required parameter 'group_membership_id'")
+            raise ValueError("Missing required parameter 'group_membership_id'.")
         url = f"{self.base_url}/group_memberships/{group_membership_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_webhooks(self, marker=None, limit=None) -> dict[str, Any]:
+    def get_webhooks(self, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a paginated list of registered webhooks with optional marker and limit query parameters.
+        List all webhooks
 
         Args:
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a list of webhooks.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Webhooks
@@ -5013,11 +7498,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_webhooks(self, target=None, address=None, triggers=None) -> dict[str, Any]:
+    def post_webhooks(self, target: Optional[dict[str, Any]] = None, address: Optional[str] = None, triggers: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Handles incoming webhook POST requests to receive, verify, and process event notifications from external systems.
+        Create webhook
 
         Args:
             target (object): The item that will trigger the webhook
@@ -5028,24 +7518,34 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the new webhook object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Webhooks
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'target': target,
             'address': address,
             'triggers': triggers,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/webhooks"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_webhooks_id(self, webhook_id) -> dict[str, Any]:
+    def get_webhooks_id(self, webhook_id: str) -> dict[str, Any]:
         """
-        Retrieves detailed information about a specific webhook identified by its webhook_id.
+        Get webhook
 
         Args:
             webhook_id (string): webhook_id
@@ -5053,20 +7553,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a webhook object
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Webhooks
         """
         if webhook_id is None:
-            raise ValueError("Missing required parameter 'webhook_id'")
+            raise ValueError("Missing required parameter 'webhook_id'.")
         url = f"{self.base_url}/webhooks/{webhook_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_webhooks_id(self, webhook_id, target=None, address=None, triggers=None) -> dict[str, Any]:
+    def put_webhooks_id(self, webhook_id: str, target: Optional[dict[str, Any]] = None, address: Optional[str] = None, triggers: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Updates an existing webhook with the specified ID using the PUT method, allowing modifications to the webhook's details.
+        Update webhook
 
         Args:
             webhook_id (string): webhook_id
@@ -5078,26 +7587,36 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the new webhook object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Webhooks
         """
         if webhook_id is None:
-            raise ValueError("Missing required parameter 'webhook_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'webhook_id'.")
+        request_body_data = None
+        request_body_data = {
             'target': target,
             'address': address,
             'triggers': triggers,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/webhooks/{webhook_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_webhooks_id(self, webhook_id) -> Any:
+    def delete_webhooks_id(self, webhook_id: str) -> Any:
         """
-        Deletes a webhook specified by its ID using the DELETE method, allowing for the removal of unnecessary webhooks and optimizing system resources.
+        Remove webhook
 
         Args:
             webhook_id (string): webhook_id
@@ -5106,20 +7625,29 @@ class BoxApp(APIApplication):
             Any: An empty response will be returned when the webhook
         was successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Webhooks
         """
         if webhook_id is None:
-            raise ValueError("Missing required parameter 'webhook_id'")
+            raise ValueError("Missing required parameter 'webhook_id'.")
         url = f"{self.base_url}/webhooks/{webhook_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_skill_invocations_id(self, skill_id, status=None, metadata=None, file=None, file_version=None, usage=None) -> Any:
+    def put_skill_invocations_id(self, skill_id: str, status: Optional[str] = None, metadata: Optional[dict[str, Any]] = None, file: Optional[dict[str, Any]] = None, file_version: Optional[dict[str, Any]] = None, usage: Optional[dict[str, Any]] = None) -> Any:
         """
-        Invokes or updates a skill with the specified ID using the PUT method, returning a response based on the operation's success or failure status.
+        Update all Box Skill cards on file
 
         Args:
             skill_id (string): skill_id
@@ -5137,56 +7665,94 @@ class BoxApp(APIApplication):
         Returns:
             Any: Returns an empty response when the card has been successfully updated.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Skills
         """
         if skill_id is None:
-            raise ValueError("Missing required parameter 'skill_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'skill_id'.")
+        request_body_data = None
+        request_body_data = {
             'status': status,
             'metadata': metadata,
             'file': file,
             'file_version': file_version,
             'usage': usage,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/skill_invocations/{skill_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
     def options_events(self) -> dict[str, Any]:
         """
-        Retrieves the communication options and supported HTTP methods available for the "/events" resource.
+        Get events long poll endpoint
 
         Returns:
             dict[str, Any]: Returns a paginated array of servers that can be used
         instead of the regular endpoints for long-polling events.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Events
         """
+        request_body_data = None
         url = f"{self.base_url}/events"
         query_params = {}
-        response = self._options(url, data={}, params=query_params)
+        response = self._options(url, data=request_body_data, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_events(self, stream_type=None, stream_position=None, limit=None, event_type=None, created_after=None, created_before=None) -> dict[str, Any]:
+    def get_events(self, stream_type: Optional[str] = None, stream_position: Optional[str] = None, limit: Optional[int] = None, event_type: Optional[List[str]] = None, created_after: Optional[str] = None, created_before: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a list of events based on specified filters such as stream type, stream position, event type, and creation time, using the "GET" method at the "/events" endpoint.
+        List user and enterprise events
 
         Args:
-            stream_type (string): Defines the type of events that are returned * `all` returns everything for a user and is the default
-        * `changes` returns events that may cause file tree changes such as file updates or collaborations.
+            stream_type (string): Defines the type of events that are returned
+
+        * `all` returns everything for a user and is the default
+        * `changes` returns events that may cause file tree changes
+          such as file updates or collaborations.
         * `sync` is similar to `changes` but only applies to synced folders
-        * `admin_logs` returns all events for an entire enterprise and requires the user making the API call to have admin permissions. This stream type is for programmatically pulling from a 1 year history of events across all users within the enterprise and within a `created_after` and `created_before` time frame. The complete history of events will be returned in chronological order based on the event time, but latency will be much higher than `admin_logs_streaming`.
-        * `admin_logs_streaming` returns all events for an entire enterprise and requires the user making the API call to have admin permissions. This stream type is for polling for recent events across all users within the enterprise. Latency will be much lower than `admin_logs`, but events will not be returned in chronological order and may contain duplicates. Example: 'all'.
-            stream_position (string): The location in the event stream to start receiving events from. * `now` will return an empty list events and
+        * `admin_logs` returns all events for an entire enterprise and
+          requires the user making the API call to have admin permissions. This
+          stream type is for programmatically pulling from a 1 year history of
+          events across all users within the enterprise and within a
+          `created_after` and `created_before` time frame. The complete history
+          of events will be returned in chronological order based on the event
+          time, but latency will be much higher than `admin_logs_streaming`.
+        * `admin_logs_streaming` returns all events for an entire enterprise and
+          requires the user making the API call to have admin permissions. This
+          stream type is for polling for recent events across all users within
+          the enterprise. Latency will be much lower than `admin_logs`, but
+          events will not be returned in chronological order and may
+          contain duplicates. Example: 'all'.
+            stream_position (string): The location in the event stream to start receiving events from.
+
+        * `now` will return an empty list events and
         the latest stream position for initialization.
         * `0` or `null` will return all events. Example: '1348790499819'.
-            limit (integer): Limits the number of events returned Note: Sometimes, the events less than the limit requested can be returned
+            limit (integer): Limits the number of events returned
+
+        Note: Sometimes, the events less than the limit requested can be returned
         even when there may be more events remaining. This is primarily done in
         the case where a number of events have already been retrieved and these
         retrieved events are returned rather than delaying for an unknown amount
@@ -5211,6 +7777,10 @@ class BoxApp(APIApplication):
         chunk, as well as the next `stream_position` that can be
         queried.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Events
         """
@@ -5218,27 +7788,40 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('stream_type', stream_type), ('stream_position', stream_position), ('limit', limit), ('event_type', event_type), ('created_after', created_after), ('created_before', created_before)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_collections(self, fields=None, offset=None, limit=None) -> dict[str, Any]:
+    def get_collections(self, fields: Optional[List[str]] = None, offset: Optional[int] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of collections with optional filtering by specified fields, starting from a given offset, and limited to a specified number of results using the "GET" method at the path "/collections".
+        List all collections
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns all collections for the given user
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Collections
@@ -5247,22 +7830,31 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('fields', fields), ('offset', offset), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_collections_id_items(self, collection_id, fields=None, offset=None, limit=None) -> dict[str, Any]:
+    def get_collections_id_items(self, collection_id: str, fields: Optional[List[str]] = None, offset: Optional[int] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a paginated list of items from a specified collection, optionally filtered by selected fields.
+        List collection items
 
         Args:
             collection_id (string): collection_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
-            offset (integer): The offset of the item at which to begin the response. Queries with offset parameter value
+            offset (integer): The offset of the item at which to begin the response.
+
+        Queries with offset parameter value
         exceeding 10000 will be rejected
         with a 400 response. Example: '1000'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
@@ -5270,20 +7862,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns an array of items in the collection.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Collections
         """
         if collection_id is None:
-            raise ValueError("Missing required parameter 'collection_id'")
+            raise ValueError("Missing required parameter 'collection_id'.")
         url = f"{self.base_url}/collections/{collection_id}/items"
         query_params = {k: v for k, v in [('fields', fields), ('offset', offset), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_collections_id(self, collection_id) -> dict[str, Any]:
+    def get_collections_id(self, collection_id: str) -> dict[str, Any]:
         """
-        Retrieves detailed information about a specific collection identified by the collection_id.
+        Get collection by ID
 
         Args:
             collection_id (string): collection_id
@@ -5291,35 +7892,52 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns an array of items in the collection.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Collections
         """
         if collection_id is None:
-            raise ValueError("Missing required parameter 'collection_id'")
+            raise ValueError("Missing required parameter 'collection_id'.")
         url = f"{self.base_url}/collections/{collection_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_recent_items(self, fields=None, limit=None, marker=None) -> dict[str, Any]:
+    def get_recent_items(self, fields: Optional[List[str]] = None, limit: Optional[int] = None, marker: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a list of recent items using the "GET" method at the "/recent_items" path, allowing customization with fields, limit, and marker parameters.
+        List recently accessed items
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
 
         Returns:
             dict[str, Any]: Returns a list recent items access by a user.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Recent items
@@ -5328,11 +7946,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('fields', fields), ('limit', limit), ('marker', marker)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_retention_policies(self, policy_name=None, policy_type=None, created_by_user_id=None, fields=None, limit=None, marker=None) -> dict[str, Any]:
+    def get_retention_policies(self, policy_name: Optional[str] = None, policy_type: Optional[str] = None, created_by_user_id: Optional[str] = None, fields: Optional[List[str]] = None, limit: Optional[int] = None, marker: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a list of retention policies with optional filtering by name, type, creator, fields, limit, and pagination marker.
+        List retention policies
 
         Args:
             policy_name (string): Filters results by a case sensitive prefix of the name of
@@ -5341,7 +7964,9 @@ class BoxApp(APIApplication):
             created_by_user_id (string): Filters results by the ID of the user who created policy. Example: '21312321'.
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -5353,6 +7978,10 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a list retention policies in the enterprise.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Retention policies
         """
@@ -5360,11 +7989,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('policy_name', policy_name), ('policy_type', policy_type), ('created_by_user_id', created_by_user_id), ('fields', fields), ('limit', limit), ('marker', marker)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_retention_policies(self, policy_name=None, description=None, policy_type=None, disposition_action=None, retention_length=None, retention_type=None, can_owner_extend_retention=None, are_owners_notified=None, custom_notification_recipients=None) -> dict[str, Any]:
+    def post_retention_policies(self, policy_name: Optional[str] = None, description: Optional[str] = None, policy_type: Optional[str] = None, disposition_action: Optional[str] = None, retention_length: Optional[Any] = None, retention_type: Optional[str] = None, can_owner_extend_retention: Optional[bool] = None, are_owners_notified: Optional[bool] = None, custom_notification_recipients: Optional[List[dict[str, Any]]] = None) -> dict[str, Any]:
         """
-        Creates a new data retention policy using the API and returns a relevant status message upon successful creation, handling potential errors for invalid requests or conflicts.
+        Create retention policy
 
         Args:
             policy_name (string): The name for the retention policy Example: 'Some Policy Name'.
@@ -5411,10 +8045,15 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new retention policy object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Retention policies
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'policy_name': policy_name,
             'description': description,
             'policy_type': policy_type,
@@ -5425,22 +8064,29 @@ class BoxApp(APIApplication):
             'are_owners_notified': are_owners_notified,
             'custom_notification_recipients': custom_notification_recipients,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/retention_policies"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_retention_policies_id(self, retention_policy_id, fields=None) -> dict[str, Any]:
+    def get_retention_policies_id(self, retention_policy_id: str, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves detailed information about a specific data retention policy identified by its retention_policy_id.
+        Get retention policy
 
         Args:
             retention_policy_id (string): retention_policy_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -5449,20 +8095,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the retention policy object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Retention policies
         """
         if retention_policy_id is None:
-            raise ValueError("Missing required parameter 'retention_policy_id'")
+            raise ValueError("Missing required parameter 'retention_policy_id'.")
         url = f"{self.base_url}/retention_policies/{retention_policy_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_retention_policies_id(self, retention_policy_id, policy_name=None, description=None, disposition_action=None, retention_type=None, retention_length=None, status=None, can_owner_extend_retention=None, are_owners_notified=None, custom_notification_recipients=None) -> dict[str, Any]:
+    def put_retention_policies_id(self, retention_policy_id: str, policy_name: Optional[str] = None, description: Optional[str] = None, disposition_action: Optional[Any] = None, retention_type: Optional[str] = None, retention_length: Optional[Any] = None, status: Optional[str] = None, can_owner_extend_retention: Optional[bool] = None, are_owners_notified: Optional[bool] = None, custom_notification_recipients: Optional[List[dict[str, Any]]] = None) -> dict[str, Any]:
         """
-        Updates an existing data retention policy identified by its retention_policy_id to modify how data is retained and purged.
+        Update retention policy
 
         Args:
             retention_policy_id (string): retention_policy_id
@@ -5516,12 +8171,17 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the updated retention policy object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Retention policies
         """
         if retention_policy_id is None:
-            raise ValueError("Missing required parameter 'retention_policy_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'retention_policy_id'.")
+        request_body_data = None
+        request_body_data = {
             'policy_name': policy_name,
             'description': description,
             'disposition_action': disposition_action,
@@ -5532,16 +8192,21 @@ class BoxApp(APIApplication):
             'are_owners_notified': are_owners_notified,
             'custom_notification_recipients': custom_notification_recipients,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/retention_policies/{retention_policy_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_retention_policies_id(self, retention_policy_id) -> Any:
+    def delete_retention_policies_id(self, retention_policy_id: str) -> Any:
         """
-        Deletes a specified retention policy identified by retention_policy_id.
+        Delete retention policy
 
         Args:
             retention_policy_id (string): retention_policy_id
@@ -5549,27 +8214,38 @@ class BoxApp(APIApplication):
         Returns:
             Any: Returns an empty response when the policy has been deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Retention policies
         """
         if retention_policy_id is None:
-            raise ValueError("Missing required parameter 'retention_policy_id'")
+            raise ValueError("Missing required parameter 'retention_policy_id'.")
         url = f"{self.base_url}/retention_policies/{retention_policy_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_retention_policies_id_assignments(self, retention_policy_id, type=None, fields=None, marker=None, limit=None) -> dict[str, Any]:
+    def get_retention_policy_assignments(self, retention_policy_id: str, type: Optional[str] = None, fields: Optional[List[str]] = None, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of assignments for a specified retention policy, optionally filtered by type and including specified fields, with support for pagination.
+        List retention policy assignments
 
         Args:
             retention_policy_id (string): retention_policy_id
             type (string): The type of the retention policy assignment to retrieve. Example: 'metadata_template'.
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -5582,20 +8258,29 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a list of the retention policy assignments associated with the
         specified retention policy.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Retention policy assignments
         """
         if retention_policy_id is None:
-            raise ValueError("Missing required parameter 'retention_policy_id'")
+            raise ValueError("Missing required parameter 'retention_policy_id'.")
         url = f"{self.base_url}/retention_policies/{retention_policy_id}/assignments"
         query_params = {k: v for k, v in [('type', type), ('fields', fields), ('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_retention_policy_assignments(self, policy_id=None, assign_to=None, filter_fields=None, start_date_field=None) -> dict[str, Any]:
+    def create_retention_policy_assignment(self, policy_id: Optional[str] = None, assign_to: Optional[dict[str, Any]] = None, filter_fields: Optional[List[dict[str, Any]]] = None, start_date_field: Optional[str] = None) -> dict[str, Any]:
         """
-        Creates a new retention policy assignment using the "POST" method, specifying rules for retaining files based on folders or metadata, and returns a status message upon successful creation.
+        Assign retention policy
 
         Args:
             policy_id (string): The ID of the retention policy to assign Example: '173463'.
@@ -5612,31 +8297,43 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new retention policy assignment object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Retention policy assignments
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'policy_id': policy_id,
             'assign_to': assign_to,
             'filter_fields': filter_fields,
             'start_date_field': start_date_field,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/retention_policy_assignments"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_retention_policy_assignments_id(self, retention_policy_assignment_id, fields=None) -> dict[str, Any]:
+    def get_retention_policy_assignment_by_id(self, retention_policy_assignment_id: str, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves the details of a specific retention policy assignment identified by the retention_policy_assignment_id.
+        Get retention policy assignment
 
         Args:
             retention_policy_assignment_id (string): retention_policy_assignment_id
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -5645,20 +8342,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the retention policy assignment object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Retention policy assignments
         """
         if retention_policy_assignment_id is None:
-            raise ValueError("Missing required parameter 'retention_policy_assignment_id'")
+            raise ValueError("Missing required parameter 'retention_policy_assignment_id'.")
         url = f"{self.base_url}/retention_policy_assignments/{retention_policy_assignment_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_retention_policy_assignments_id(self, retention_policy_assignment_id) -> Any:
+    def delete_retention_policy_assignment_by_id(self, retention_policy_assignment_id: str) -> Any:
         """
-        Deletes a retention policy assignment by ID using the DELETE method, removing the specified rule that retains files based on predefined conditions.
+        Remove retention policy assignment
 
         Args:
             retention_policy_assignment_id (string): retention_policy_assignment_id
@@ -5667,87 +8373,126 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the policy assignment
         is successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Retention policy assignments
         """
         if retention_policy_assignment_id is None:
-            raise ValueError("Missing required parameter 'retention_policy_assignment_id'")
+            raise ValueError("Missing required parameter 'retention_policy_assignment_id'.")
         url = f"{self.base_url}/retention_policy_assignments/{retention_policy_assignment_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_retention_policy_assignments_id_files_under_retention(self, retention_policy_assignment_id, marker=None, limit=None) -> dict[str, Any]:
+    def get_files_under_retention(self, retention_policy_assignment_id: str, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a paginated list of files currently under retention for a specified retention policy assignment.
+        Get files under retention
 
         Args:
             retention_policy_assignment_id (string): retention_policy_assignment_id
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a list of files under retention that are associated with the
         specified retention policy assignment.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Retention policy assignments
         """
         if retention_policy_assignment_id is None:
-            raise ValueError("Missing required parameter 'retention_policy_assignment_id'")
+            raise ValueError("Missing required parameter 'retention_policy_assignment_id'.")
         url = f"{self.base_url}/retention_policy_assignments/{retention_policy_assignment_id}/files_under_retention"
         query_params = {k: v for k, v in [('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_retention_policy_assignments_id_file_versions_under_retention(self, retention_policy_assignment_id, marker=None, limit=None) -> dict[str, Any]:
+    def get_retention_policy_assignment_file_versions(self, retention_policy_assignment_id: str, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of file versions that are under retention, associated with a specified retention policy assignment, allowing for pagination via query parameters.
+        Get file versions under retention
 
         Args:
             retention_policy_assignment_id (string): retention_policy_assignment_id
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a list of file versions under retention that are associated with
         the specified retention policy assignment.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Retention policy assignments
         """
         if retention_policy_assignment_id is None:
-            raise ValueError("Missing required parameter 'retention_policy_assignment_id'")
+            raise ValueError("Missing required parameter 'retention_policy_assignment_id'.")
         url = f"{self.base_url}/retention_policy_assignments/{retention_policy_assignment_id}/file_versions_under_retention"
         query_params = {k: v for k, v in [('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_legal_hold_policies(self, policy_name=None, fields=None, marker=None, limit=None) -> dict[str, Any]:
+    def get_legal_hold_policies(self, policy_name: Optional[str] = None, fields: Optional[List[str]] = None, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of legal hold policies filtered by optional parameters such as policy name, fields, pagination marker, and limit.
+        List all legal hold policies
 
         Args:
             policy_name (string): Limits results to policies for which the names start with
         this search term. This is a case-insensitive prefix. Example: 'Sales Policy'.
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a list of legal hold policies.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Legal hold policies
@@ -5756,11 +8501,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('policy_name', policy_name), ('fields', fields), ('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_legal_hold_policies(self, policy_name=None, description=None, filter_started_at=None, filter_ended_at=None, is_ongoing=None) -> dict[str, Any]:
+    def post_legal_hold_policies(self, policy_name: Optional[str] = None, description: Optional[str] = None, filter_started_at: Optional[str] = None, filter_ended_at: Optional[str] = None, is_ongoing: Optional[bool] = None) -> dict[str, Any]:
         """
-        Creates a new Legal Hold policy that can include specified restrictions to preserve relevant data for compliance or litigation purposes.
+        Create legal hold policy
 
         Args:
             policy_name (string): The name of the policy. Example: 'Sales Policy'.
@@ -5799,26 +8549,36 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new legal hold policy object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Legal hold policies
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'policy_name': policy_name,
             'description': description,
             'filter_started_at': filter_started_at,
             'filter_ended_at': filter_ended_at,
             'is_ongoing': is_ongoing,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/legal_hold_policies"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_legal_hold_policies_id(self, legal_hold_policy_id) -> dict[str, Any]:
+    def get_legal_hold_policies_id(self, legal_hold_policy_id: str) -> dict[str, Any]:
         """
-        Retrieves detailed information about a specific legal hold policy identified by its legal_hold_policy_id.
+        Get legal hold policy
 
         Args:
             legal_hold_policy_id (string): legal_hold_policy_id
@@ -5826,20 +8586,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a legal hold policy object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Legal hold policies
         """
         if legal_hold_policy_id is None:
-            raise ValueError("Missing required parameter 'legal_hold_policy_id'")
+            raise ValueError("Missing required parameter 'legal_hold_policy_id'.")
         url = f"{self.base_url}/legal_hold_policies/{legal_hold_policy_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_legal_hold_policies_id(self, legal_hold_policy_id, policy_name=None, description=None, release_notes=None) -> dict[str, Any]:
+    def put_legal_hold_policies_id(self, legal_hold_policy_id: str, policy_name: Optional[str] = None, description: Optional[str] = None, release_notes: Optional[str] = None) -> dict[str, Any]:
         """
-        Updates the details of an existing legal hold policy identified by the legal_hold_policy_id.
+        Update legal hold policy
 
         Args:
             legal_hold_policy_id (string): legal_hold_policy_id
@@ -5850,26 +8619,36 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new legal hold policy object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Legal hold policies
         """
         if legal_hold_policy_id is None:
-            raise ValueError("Missing required parameter 'legal_hold_policy_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'legal_hold_policy_id'.")
+        request_body_data = None
+        request_body_data = {
             'policy_name': policy_name,
             'description': description,
             'release_notes': release_notes,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/legal_hold_policies/{legal_hold_policy_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_legal_hold_policies_id(self, legal_hold_policy_id) -> Any:
+    def delete_legal_hold_policies_id(self, legal_hold_policy_id: str) -> Any:
         """
-        Deletes an existing legal hold policy asynchronously by its ID, initiating removal without immediate full deletion.
+        Remove legal hold policy
 
         Args:
             legal_hold_policy_id (string): legal_hold_policy_id
@@ -5878,20 +8657,29 @@ class BoxApp(APIApplication):
             Any: A blank response is returned if the policy was
         successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Legal hold policies
         """
         if legal_hold_policy_id is None:
-            raise ValueError("Missing required parameter 'legal_hold_policy_id'")
+            raise ValueError("Missing required parameter 'legal_hold_policy_id'.")
         url = f"{self.base_url}/legal_hold_policies/{legal_hold_policy_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_legal_hold_policy_assignments(self, policy_id, assign_to_type=None, assign_to_id=None, marker=None, limit=None, fields=None) -> dict[str, Any]:
+    def get_legal_hold_policy_assignments(self, policy_id: str, assign_to_type: Optional[str] = None, assign_to_id: Optional[str] = None, marker: Optional[str] = None, limit: Optional[int] = None, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves legal hold policy assignments based on specified parameters like policy ID, assignment type, and ID, allowing for pagination and customizable field selection.
+        List legal hold policy assignments
 
         Args:
             policy_id (string): The ID of the legal hold policy Example: '324432'.
@@ -5900,11 +8688,15 @@ class BoxApp(APIApplication):
             assign_to_id (string): Filters the results by the ID of item the
         policy was applied to. Example: '1234323'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -5913,6 +8705,10 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a list of legal hold policy assignments.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Legal hold policy assignments
         """
@@ -5920,11 +8716,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('policy_id', policy_id), ('assign_to_type', assign_to_type), ('assign_to_id', assign_to_id), ('marker', marker), ('limit', limit), ('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_legal_hold_policy_assignments(self, policy_id=None, assign_to=None) -> dict[str, Any]:
+    def assign_legal_hold_policy(self, policy_id: Optional[str] = None, assign_to: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Creates a legal hold policy assignment that places a hold on specified users, folders, files, or file versions to preserve data for legal purposes.
+        Assign legal hold policy
 
         Args:
             policy_id (string): The ID of the policy to assign. Example: '123244'.
@@ -5933,23 +8734,33 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new legal hold policy assignment.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Legal hold policy assignments
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'policy_id': policy_id,
             'assign_to': assign_to,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/legal_hold_policy_assignments"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_legal_hold_policy_assignments_id(self, legal_hold_policy_assignment_id) -> dict[str, Any]:
+    def get_legal_hold_policy_assignment(self, legal_hold_policy_assignment_id: str) -> dict[str, Any]:
         """
-        Retrieves the details of a specific legal hold policy assignment by its ID.
+        Get legal hold policy assignment
 
         Args:
             legal_hold_policy_assignment_id (string): legal_hold_policy_assignment_id
@@ -5957,20 +8768,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a legal hold policy object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Legal hold policy assignments
         """
         if legal_hold_policy_assignment_id is None:
-            raise ValueError("Missing required parameter 'legal_hold_policy_assignment_id'")
+            raise ValueError("Missing required parameter 'legal_hold_policy_assignment_id'.")
         url = f"{self.base_url}/legal_hold_policy_assignments/{legal_hold_policy_assignment_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_legal_hold_policy_assignments_id(self, legal_hold_policy_assignment_id) -> Any:
+    def delete_legal_hold_assignment(self, legal_hold_policy_assignment_id: str) -> Any:
         """
-        Deletes a legal hold policy assignment by its ID, initiating an asynchronous removal of the hold from the assigned item.
+        Unassign legal hold policy
 
         Args:
             legal_hold_policy_assignment_id (string): legal_hold_policy_assignment_id
@@ -5979,29 +8799,42 @@ class BoxApp(APIApplication):
             Any: A blank response is returned if the assignment was
         successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Legal hold policy assignments
         """
         if legal_hold_policy_assignment_id is None:
-            raise ValueError("Missing required parameter 'legal_hold_policy_assignment_id'")
+            raise ValueError("Missing required parameter 'legal_hold_policy_assignment_id'.")
         url = f"{self.base_url}/legal_hold_policy_assignments/{legal_hold_policy_assignment_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_legal_hold_policy_assignments_id_files_on_hold(self, legal_hold_policy_assignment_id, marker=None, limit=None, fields=None) -> dict[str, Any]:
+    def get_files_on_hold_by_legl_hld_polcy_asgnmt_id(self, legal_hold_policy_assignment_id: str, marker: Optional[str] = None, limit: Optional[int] = None, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves the list of files currently on hold under a specific legal hold policy assignment.
+        List files with current file versions for legal hold policy assignment
 
         Args:
             legal_hold_policy_assignment_id (string): legal_hold_policy_assignment_id
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -6011,20 +8844,29 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the list of current file versions held under legal hold for a
         specific legal hold policy assignment.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Legal hold policy assignments
         """
         if legal_hold_policy_assignment_id is None:
-            raise ValueError("Missing required parameter 'legal_hold_policy_assignment_id'")
+            raise ValueError("Missing required parameter 'legal_hold_policy_assignment_id'.")
         url = f"{self.base_url}/legal_hold_policy_assignments/{legal_hold_policy_assignment_id}/files_on_hold"
         query_params = {k: v for k, v in [('marker', marker), ('limit', limit), ('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_file_version_retentions(self, file_id=None, file_version_id=None, policy_id=None, disposition_action=None, disposition_before=None, disposition_after=None, limit=None, marker=None) -> dict[str, Any]:
+    def get_file_version_retentions(self, file_id: Optional[str] = None, file_version_id: Optional[str] = None, policy_id: Optional[str] = None, disposition_action: Optional[str] = None, disposition_before: Optional[str] = None, disposition_after: Optional[str] = None, limit: Optional[int] = None, marker: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a list of file version retentions filtered by query parameters such as file ID, version ID, policy ID, disposition action, and date range.
+        List file version retentions
 
         Args:
             file_id (string): Filters results by files with this ID. Example: '43123123'.
@@ -6038,10 +8880,16 @@ class BoxApp(APIApplication):
         come into effect after this date. Example: '2012-12-19T10:34:23-08:00'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
 
         Returns:
             dict[str, Any]: Returns a list of all file version retentions for the enterprise.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             File version retentions
@@ -6050,20 +8898,29 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('file_id', file_id), ('file_version_id', file_version_id), ('policy_id', policy_id), ('disposition_action', disposition_action), ('disposition_before', disposition_before), ('disposition_after', disposition_after), ('limit', limit), ('marker', marker)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_legal_hold_policy_assignments_id_file_versions_on_hold(self, legal_hold_policy_assignment_id, marker=None, limit=None, fields=None) -> dict[str, Any]:
+    def get_legal_hold_file_versions_on_hold(self, legal_hold_policy_assignment_id: str, marker: Optional[str] = None, limit: Optional[int] = None, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves a list of file versions currently on hold under a specified legal hold policy assignment.
+        List previous file versions for legal hold policy assignment
 
         Args:
             legal_hold_policy_assignment_id (string): legal_hold_policy_assignment_id
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
@@ -6073,20 +8930,29 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the list of previous file versions held under legal hold for a
         specific legal hold policy assignment.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Legal hold policy assignments
         """
         if legal_hold_policy_assignment_id is None:
-            raise ValueError("Missing required parameter 'legal_hold_policy_assignment_id'")
+            raise ValueError("Missing required parameter 'legal_hold_policy_assignment_id'.")
         url = f"{self.base_url}/legal_hold_policy_assignments/{legal_hold_policy_assignment_id}/file_versions_on_hold"
         query_params = {k: v for k, v in [('marker', marker), ('limit', limit), ('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_file_version_retentions_id(self, file_version_retention_id) -> dict[str, Any]:
+    def get_file_version_retentions_id(self, file_version_retention_id: str) -> dict[str, Any]:
         """
-        Retrieves detailed information about a specific file version retention by its ID.
+        Get retention on file
 
         Args:
             file_version_retention_id (string): file_version_retention_id
@@ -6094,20 +8960,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a file version retention object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             File version retentions
         """
         if file_version_retention_id is None:
-            raise ValueError("Missing required parameter 'file_version_retention_id'")
+            raise ValueError("Missing required parameter 'file_version_retention_id'.")
         url = f"{self.base_url}/file_version_retentions/{file_version_retention_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_file_version_legal_holds_id(self, file_version_legal_hold_id) -> dict[str, Any]:
+    def get_legal_hold(self, file_version_legal_hold_id: str) -> dict[str, Any]:
         """
-        Retrieves details of a specific file version legal hold using its unique identifier.
+        Get file version legal hold
 
         Args:
             file_version_legal_hold_id (string): file_version_legal_hold_id
@@ -6115,31 +8990,46 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the legal hold policy assignments for the file version.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             File version legal holds
         """
         if file_version_legal_hold_id is None:
-            raise ValueError("Missing required parameter 'file_version_legal_hold_id'")
+            raise ValueError("Missing required parameter 'file_version_legal_hold_id'.")
         url = f"{self.base_url}/file_version_legal_holds/{file_version_legal_hold_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_file_version_legal_holds(self, policy_id, marker=None, limit=None) -> dict[str, Any]:
+    def get_file_version_legal_holds(self, policy_id: str, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of legal holds applied to file versions, supporting pagination and filtering by policy ID.
+        List file version legal holds
 
         Args:
             policy_id (string): The ID of the legal hold policy to get the file version legal
         holds for. Example: '133870'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns the list of file version legal holds for a specific legal
         hold policy.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             File version legal holds
@@ -6148,11 +9038,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('policy_id', policy_id), ('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_shield_information_barriers_id(self, shield_information_barrier_id) -> dict[str, Any]:
+    def get_shield_information_barrier_by_id(self, shield_information_barrier_id: str) -> dict[str, Any]:
         """
-        Retrieves detailed information about a specific shield information barrier identified by its ID.
+        Get shield information barrier with specified ID
 
         Args:
             shield_information_barrier_id (string): shield_information_barrier_id
@@ -6160,20 +9055,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the shield information barrier object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barriers
         """
         if shield_information_barrier_id is None:
-            raise ValueError("Missing required parameter 'shield_information_barrier_id'")
+            raise ValueError("Missing required parameter 'shield_information_barrier_id'.")
         url = f"{self.base_url}/shield_information_barriers/{shield_information_barrier_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_shield_information_barriers_change_status(self, id=None, status=None) -> dict[str, Any]:
+    def change_shield_status(self, id: Optional[str] = None, status: Optional[str] = None) -> dict[str, Any]:
         """
-        Changes the status of a specified shield information barrier using the POST method.
+        Add changed status of shield information barrier with specified ID
 
         Args:
             id (string): The ID of the shield information barrier. Example: '1910967'.
@@ -6182,23 +9086,33 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the updated shield information barrier object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barriers
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'id': id,
             'status': status,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/shield_information_barriers/change_status"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_shield_information_barriers(self, marker=None, limit=None) -> dict[str, Any]:
+    def get_shield_information_barriers(self, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of shield information barriers using the GET method, allowing users to manage and access restrictions between user segments in Box, with optional parameters to control pagination via "marker" and "limit".
+        List shield information barriers
 
         Args:
             marker (string): Defines the position marker at which to begin returning results. This is
@@ -6210,6 +9124,10 @@ class BoxApp(APIApplication):
         shield information barrier objects,
         empty list if currently no barrier.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barriers
         """
@@ -6217,11 +9135,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_shield_information_barriers(self, enterprise=None) -> dict[str, Any]:
+    def create_shield_barriers(self, enterprise: Optional[Any] = None) -> dict[str, Any]:
         """
-        Creates a shield information barrier to separate individuals or groups within the same firm, preventing the exchange of confidential information between them using the Box API.
+        Create shield information barrier
 
         Args:
             enterprise (string): The `type` and `id` of enterprise this barrier is under.
@@ -6229,31 +9152,47 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new shield information barrier object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barriers
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'enterprise': enterprise,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/shield_information_barriers"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_shield_information_barrier_reports(self, shield_information_barrier_id, marker=None, limit=None) -> dict[str, Any]:
+    def get_shield_information_barrier_reports(self, shield_information_barrier_id: str, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a paginated list of shield information barrier reports based on specified query parameters.
+        List shield information barrier reports
 
         Args:
             shield_information_barrier_id (string): The ID of the shield information barrier. Example: '1910967'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a paginated list of shield information barrier report objects.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Shield information barrier reports
@@ -6262,11 +9201,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('shield_information_barrier_id', shield_information_barrier_id), ('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_shield_information_barrier_reports(self, shield_information_barrier=None) -> dict[str, Any]:
+    def generate_shield_report(self, shield_information_barrier: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Creates a new shield information barrier report to track and manage data access restrictions between user segments.
+        Create shield information barrier report
 
         Args:
             shield_information_barrier (object): A base representation of a
@@ -6275,22 +9219,32 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the shield information barrier report information object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barrier reports
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'shield_information_barrier': shield_information_barrier,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/shield_information_barrier_reports"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_shield_information_barrier_reports_id(self, shield_information_barrier_report_id) -> dict[str, Any]:
+    def get_shield_report_by_id(self, shield_information_barrier_report_id: str) -> dict[str, Any]:
         """
-        Retrieves a specific shield information barrier report by its ID using the GET method.
+        Get shield information barrier report by ID
 
         Args:
             shield_information_barrier_report_id (string): shield_information_barrier_report_id
@@ -6298,20 +9252,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the  shield information barrier report object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barrier reports
         """
         if shield_information_barrier_report_id is None:
-            raise ValueError("Missing required parameter 'shield_information_barrier_report_id'")
+            raise ValueError("Missing required parameter 'shield_information_barrier_report_id'.")
         url = f"{self.base_url}/shield_information_barrier_reports/{shield_information_barrier_report_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_shield_information_barrier_segments_id(self, shield_information_barrier_segment_id) -> dict[str, Any]:
+    def get_shield_segment_by_id(self, shield_information_barrier_segment_id: str) -> dict[str, Any]:
         """
-        Retrieves detailed information about a specific shield information barrier segment identified by its ID.
+        Get shield information barrier segment with specified ID
 
         Args:
             shield_information_barrier_segment_id (string): shield_information_barrier_segment_id
@@ -6319,20 +9282,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the shield information barrier segment object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barrier segments
         """
         if shield_information_barrier_segment_id is None:
-            raise ValueError("Missing required parameter 'shield_information_barrier_segment_id'")
+            raise ValueError("Missing required parameter 'shield_information_barrier_segment_id'.")
         url = f"{self.base_url}/shield_information_barrier_segments/{shield_information_barrier_segment_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_shield_information_barrier_segments_id(self, shield_information_barrier_segment_id) -> Any:
+    def delete_shield_inft_barrier_sgmt_by_id(self, shield_information_barrier_segment_id: str) -> Any:
         """
-        Deletes a specific information barrier segment identified by its ID using the Box API.
+        Delete shield information barrier segment
 
         Args:
             shield_information_barrier_segment_id (string): shield_information_barrier_segment_id
@@ -6340,20 +9312,29 @@ class BoxApp(APIApplication):
         Returns:
             Any: Empty body in response
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barrier segments
         """
         if shield_information_barrier_segment_id is None:
-            raise ValueError("Missing required parameter 'shield_information_barrier_segment_id'")
+            raise ValueError("Missing required parameter 'shield_information_barrier_segment_id'.")
         url = f"{self.base_url}/shield_information_barrier_segments/{shield_information_barrier_segment_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_shield_information_barrier_segments_id(self, shield_information_barrier_segment_id, name=None, description=None) -> dict[str, Any]:
+    def update_shield_barrier_segment(self, shield_information_barrier_segment_id: str, name: Optional[str] = None, description: Optional[str] = None) -> dict[str, Any]:
         """
-        Updates the properties of a specified shield information barrier segment identified by its ID.
+        Update shield information barrier segment with specified ID
 
         Args:
             shield_information_barrier_segment_id (string): shield_information_barrier_segment_id
@@ -6364,34 +9345,50 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the updated shield information barrier segment object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barrier segments
         """
         if shield_information_barrier_segment_id is None:
-            raise ValueError("Missing required parameter 'shield_information_barrier_segment_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'shield_information_barrier_segment_id'.")
+        request_body_data = None
+        request_body_data = {
             'name': name,
             'description': description,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/shield_information_barrier_segments/{shield_information_barrier_segment_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_shield_information_barrier_segments(self, shield_information_barrier_id, marker=None, limit=None) -> dict[str, Any]:
+    def get_shield_segments(self, shield_information_barrier_id: str, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of shield information barrier segments filtered by the specified information barrier ID, with optional pagination parameters.
+        List shield information barrier segments
 
         Args:
             shield_information_barrier_id (string): The ID of the shield information barrier. Example: '1910967'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a paginated list of shield information barrier segment objects.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Shield information barrier segments
@@ -6400,11 +9397,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('shield_information_barrier_id', shield_information_barrier_id), ('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_shield_information_barrier_segments(self, shield_information_barrier=None, name=None, description=None) -> dict[str, Any]:
+    def create_shield_barrier_segments(self, shield_information_barrier: Optional[dict[str, Any]] = None, name: Optional[str] = None, description: Optional[str] = None) -> dict[str, Any]:
         """
-        Creates a new shield information barrier segment to define a restricted communication boundary between user groups within an organization.
+        Create shield information barrier segment
 
         Args:
             shield_information_barrier (object): A base representation of a
@@ -6415,24 +9417,34 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new shield information barrier segment object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barrier segments
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'shield_information_barrier': shield_information_barrier,
             'name': name,
             'description': description,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/shield_information_barrier_segments"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_shield_information_barrier_segment_members_id(self, shield_information_barrier_segment_member_id) -> dict[str, Any]:
+    def get_shield_infmt_barrier_sgmnt_member_by_id(self, shield_information_barrier_segment_member_id: str) -> dict[str, Any]:
         """
-        Retrieves a specific shield information barrier segment member by its ID using the GET method.
+        Get shield information barrier segment member by ID
 
         Args:
             shield_information_barrier_segment_member_id (string): shield_information_barrier_segment_member_id
@@ -6440,20 +9452,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the shield information barrier segment member object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barrier segment members
         """
         if shield_information_barrier_segment_member_id is None:
-            raise ValueError("Missing required parameter 'shield_information_barrier_segment_member_id'")
+            raise ValueError("Missing required parameter 'shield_information_barrier_segment_member_id'.")
         url = f"{self.base_url}/shield_information_barrier_segment_members/{shield_information_barrier_segment_member_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_shield_information_barrier_segment_members_id(self, shield_information_barrier_segment_member_id) -> Any:
+    def delete_shield_member(self, shield_information_barrier_segment_member_id: str) -> Any:
         """
-        Deletes a shield information barrier segment member identified by the given ID.
+        Delete shield information barrier segment member by ID
 
         Args:
             shield_information_barrier_segment_member_id (string): shield_information_barrier_segment_member_id
@@ -6462,30 +9483,45 @@ class BoxApp(APIApplication):
             Any: Returns an empty response if the
         segment member was deleted successfully.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barrier segment members
         """
         if shield_information_barrier_segment_member_id is None:
-            raise ValueError("Missing required parameter 'shield_information_barrier_segment_member_id'")
+            raise ValueError("Missing required parameter 'shield_information_barrier_segment_member_id'.")
         url = f"{self.base_url}/shield_information_barrier_segment_members/{shield_information_barrier_segment_member_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_shield_information_barrier_segment_members(self, shield_information_barrier_segment_id, marker=None, limit=None) -> dict[str, Any]:
+    def get_shield_infmt_barrier_sgmnt_members(self, shield_information_barrier_segment_id: str, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of members for a specified shield information barrier segment using the Box API, allowing for pagination with optional marker and limit parameters.
+        List shield information barrier segment members
 
         Args:
             shield_information_barrier_segment_id (string): The ID of the shield information barrier segment. Example: '3423'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a paginated list of
         shield information barrier segment member objects.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Shield information barrier segment members
@@ -6494,11 +9530,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('shield_information_barrier_segment_id', shield_information_barrier_segment_id), ('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_shield_information_barrier_segment_members(self, type=None, shield_information_barrier=None, shield_information_barrier_segment=None, user=None) -> dict[str, Any]:
+    def add_shield_members(self, type: Optional[str] = None, shield_information_barrier: Optional[dict[str, Any]] = None, shield_information_barrier_segment: Optional[dict[str, Any]] = None, user: Optional[Any] = None) -> dict[str, Any]:
         """
-        Creates a new shield information barrier segment member using the Box API and returns a status message indicating the result of the operation.
+        Create shield information barrier segment member
 
         Args:
             type (string): -| A type of the shield barrier segment member. Example: 'shield_information_barrier_segment_member'.
@@ -6511,25 +9552,35 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new shield information barrier segment member object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barrier segment members
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'type': type,
             'shield_information_barrier': shield_information_barrier,
             'shield_information_barrier_segment': shield_information_barrier_segment,
             'user': user,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/shield_information_barrier_segment_members"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_shield_information_barrier_segment_restrictions_id(self, shield_information_barrier_segment_restriction_id) -> dict[str, Any]:
+    def get_shield_barrier_segment_restriction_by_id(self, shield_information_barrier_segment_restriction_id: str) -> dict[str, Any]:
         """
-        Retrieves detailed information about a specific shield information barrier segment restriction by its ID.
+        Get shield information barrier segment restriction by ID
 
         Args:
             shield_information_barrier_segment_restriction_id (string): shield_information_barrier_segment_restriction_id
@@ -6538,20 +9589,29 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the shield information barrier segment
         restriction object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barrier segment restrictions
         """
         if shield_information_barrier_segment_restriction_id is None:
-            raise ValueError("Missing required parameter 'shield_information_barrier_segment_restriction_id'")
+            raise ValueError("Missing required parameter 'shield_information_barrier_segment_restriction_id'.")
         url = f"{self.base_url}/shield_information_barrier_segment_restrictions/{shield_information_barrier_segment_restriction_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_shield_information_barrier_segment_restrictions_id(self, shield_information_barrier_segment_restriction_id) -> Any:
+    def delete_shield_restriction(self, shield_information_barrier_segment_restriction_id: str) -> Any:
         """
-        Deletes a specified shield information barrier segment restriction by its ID, removing the associated restriction from the system.
+        Delete shield information barrier segment restriction by ID
 
         Args:
             shield_information_barrier_segment_restriction_id (string): shield_information_barrier_segment_restriction_id
@@ -6559,30 +9619,45 @@ class BoxApp(APIApplication):
         Returns:
             Any: Empty body in response
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barrier segment restrictions
         """
         if shield_information_barrier_segment_restriction_id is None:
-            raise ValueError("Missing required parameter 'shield_information_barrier_segment_restriction_id'")
+            raise ValueError("Missing required parameter 'shield_information_barrier_segment_restriction_id'.")
         url = f"{self.base_url}/shield_information_barrier_segment_restrictions/{shield_information_barrier_segment_restriction_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_shield_information_barrier_segment_restrictions(self, shield_information_barrier_segment_id, marker=None, limit=None) -> dict[str, Any]:
+    def get_shield_infmt_barrier_sgmnt_restrictions(self, shield_information_barrier_segment_id: str, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of segment restrictions for an information barrier segment specified by the `shield_information_barrier_segment_id` using the Box API.
+        List shield information barrier segment restrictions
 
         Args:
             shield_information_barrier_segment_id (string): The ID of the shield information barrier segment. Example: '3423'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a paginated list of
         shield information barrier segment restriction objects.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Shield information barrier segment restrictions
@@ -6591,11 +9666,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('shield_information_barrier_segment_id', shield_information_barrier_segment_id), ('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_shield_information_barrier_segment_restrictions(self, type=None, shield_information_barrier=None, shield_information_barrier_segment=None, restricted_segment=None) -> dict[str, Any]:
+    def create_shield_restrictions(self, type: Optional[str] = None, shield_information_barrier: Optional[dict[str, Any]] = None, shield_information_barrier_segment: Optional[dict[str, Any]] = None, restricted_segment: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Creates a new shield information barrier segment restriction to control data access between defined segments.
+        Create shield information barrier segment restriction
 
         Args:
             type (string): The type of the shield barrier segment
@@ -6611,25 +9691,35 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns the newly created Shield
         Information Barrier Segment Restriction object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Shield information barrier segment restrictions
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'type': type,
             'shield_information_barrier': shield_information_barrier,
             'shield_information_barrier_segment': shield_information_barrier_segment,
             'restricted_segment': restricted_segment,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/shield_information_barrier_segment_restrictions"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_device_pinners_id(self, device_pinner_id) -> dict[str, Any]:
+    def get_device_pinners_id(self, device_pinner_id: str) -> dict[str, Any]:
         """
-        Retrieves details for a specific device pinner using its unique identifier.
+        Get device pin
 
         Args:
             device_pinner_id (string): device_pinner_id
@@ -6637,20 +9727,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns information about a single device pin.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Device pinners
         """
         if device_pinner_id is None:
-            raise ValueError("Missing required parameter 'device_pinner_id'")
+            raise ValueError("Missing required parameter 'device_pinner_id'.")
         url = f"{self.base_url}/device_pinners/{device_pinner_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_device_pinners_id(self, device_pinner_id) -> Any:
+    def delete_device_pinners_id(self, device_pinner_id: str) -> Any:
         """
-        Deletes a device pinner by ID using the DELETE method, identified by the path parameter "device_pinner_id".
+        Remove device pin
 
         Args:
             device_pinner_id (string): device_pinner_id
@@ -6658,25 +9757,36 @@ class BoxApp(APIApplication):
         Returns:
             Any: Returns an empty response when the pin has been deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Device pinners
         """
         if device_pinner_id is None:
-            raise ValueError("Missing required parameter 'device_pinner_id'")
+            raise ValueError("Missing required parameter 'device_pinner_id'.")
         url = f"{self.base_url}/device_pinners/{device_pinner_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_enterprises_id_device_pinners(self, enterprise_id, marker=None, limit=None, direction=None) -> dict[str, Any]:
+    def list_device_pins(self, enterprise_id: str, marker: Optional[str] = None, limit: Optional[int] = None, direction: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a list of all device pins within a specified enterprise to manage and inspect devices authorized to access Box applications.
+        List enterprise device pins
 
         Args:
             enterprise_id (string): enterprise_id
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             direction (string): The direction to sort results in. This can be either in alphabetical ascending
         (`ASC`) or descending (`DESC`) order. Example: 'ASC'.
@@ -6684,20 +9794,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a list of device pins for a given enterprise.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Device pinners
         """
         if enterprise_id is None:
-            raise ValueError("Missing required parameter 'enterprise_id'")
+            raise ValueError("Missing required parameter 'enterprise_id'.")
         url = f"{self.base_url}/enterprises/{enterprise_id}/device_pinners"
         query_params = {k: v for k, v in [('marker', marker), ('limit', limit), ('direction', direction)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_terms_of_services(self, tos_type=None) -> dict[str, Any]:
+    def get_terms_of_services(self, tos_type: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves terms of service details based on the specified type using the GET method at the "/terms_of_services" path, with the type of terms of service passed as a query parameter named "tos_type."
+        List terms of services
 
         Args:
             tos_type (string): Limits the results to the terms of service of the given type. Example: 'managed'.
@@ -6706,6 +9825,10 @@ class BoxApp(APIApplication):
             dict[str, Any]: Returns a collection of terms of service text and settings for the
         enterprise.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Terms of service
         """
@@ -6713,11 +9836,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('tos_type', tos_type)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_terms_of_services(self, status=None, tos_type=None, text=None) -> dict[str, Any]:
+    def post_terms_of_services(self, status: Optional[str] = None, tos_type: Optional[str] = None, text: Optional[str] = None) -> dict[str, Any]:
         """
-        Submits terms of service data to the server using the POST method and returns a response indicating the result.
+        Create terms of service
 
         Args:
             status (string): Whether this terms of service is active. Example: 'enabled'.
@@ -6730,24 +9858,34 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new task object
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Terms of service
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'status': status,
             'tos_type': tos_type,
             'text': text,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/terms_of_services"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_terms_of_services_id(self, terms_of_service_id) -> dict[str, Any]:
+    def get_terms_of_services_id(self, terms_of_service_id: str) -> dict[str, Any]:
         """
-        Retrieves the details of a specific Terms of Service identified by the provided terms_of_service_id.
+        Get terms of service
 
         Args:
             terms_of_service_id (string): terms_of_service_id
@@ -6755,20 +9893,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a terms of service object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Terms of service
         """
         if terms_of_service_id is None:
-            raise ValueError("Missing required parameter 'terms_of_service_id'")
+            raise ValueError("Missing required parameter 'terms_of_service_id'.")
         url = f"{self.base_url}/terms_of_services/{terms_of_service_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_terms_of_services_id(self, terms_of_service_id, status=None, text=None) -> dict[str, Any]:
+    def put_terms_of_services_id(self, terms_of_service_id: str, status: Optional[str] = None, text: Optional[str] = None) -> dict[str, Any]:
         """
-        Updates the terms of service identified by the given terms_of_service_id with new information.
+        Update terms of service
 
         Args:
             terms_of_service_id (string): terms_of_service_id
@@ -6780,25 +9927,35 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns an updated terms of service object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Terms of service
         """
         if terms_of_service_id is None:
-            raise ValueError("Missing required parameter 'terms_of_service_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'terms_of_service_id'.")
+        request_body_data = None
+        request_body_data = {
             'status': status,
             'text': text,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/terms_of_services/{terms_of_service_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_terms_of_service_user_statuses(self, tos_id, user_id=None) -> dict[str, Any]:
+    def get_tos_user_statuses(self, tos_id: str, user_id: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a list of user statuses for a specified terms of service, including whether users have accepted the terms and when, using query parameters to filter by terms of service ID and user ID.
+        List terms of service user statuses
 
         Args:
             tos_id (string): The ID of the terms of service. Example: '324234'.
@@ -6807,6 +9964,10 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a list of terms of service statuses.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Terms of service user statuses
         """
@@ -6814,11 +9975,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('tos_id', tos_id), ('user_id', user_id)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_terms_of_service_user_statuses(self, tos=None, user=None, is_accepted=None) -> dict[str, Any]:
+    def create_terms_of_service_statuses(self, tos: Optional[dict[str, Any]] = None, user: Optional[dict[str, Any]] = None, is_accepted: Optional[bool] = None) -> dict[str, Any]:
         """
-        Creates a new record tracking the acceptance status of a specific user for a terms of service agreement and returns a confirmation upon success.
+        Create terms of service status for new user
 
         Args:
             tos (object): The terms of service to set the status for.
@@ -6828,24 +9994,34 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a terms of service status object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Terms of service user statuses
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'tos': tos,
             'user': user,
             'is_accepted': is_accepted,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/terms_of_service_user_statuses"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_terms_of_service_user_statuses_id(self, terms_of_service_user_status_id, is_accepted=None) -> dict[str, Any]:
+    def update_terms_of_service_user_status_by_id(self, terms_of_service_user_status_id: str, is_accepted: Optional[bool] = None) -> dict[str, Any]:
         """
-        Updates the status of a user's acceptance for a specific Terms of Service using the given user status ID.
+        Update terms of service status for existing user
 
         Args:
             terms_of_service_user_status_id (string): terms_of_service_user_status_id
@@ -6854,32 +10030,48 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the updated terms of service status object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Terms of service user statuses
         """
         if terms_of_service_user_status_id is None:
-            raise ValueError("Missing required parameter 'terms_of_service_user_status_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'terms_of_service_user_status_id'.")
+        request_body_data = None
+        request_body_data = {
             'is_accepted': is_accepted,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/terms_of_service_user_statuses/{terms_of_service_user_status_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_collaboration_whitelist_entries(self, marker=None, limit=None) -> dict[str, Any]:
+    def list_collaboration_whitelist_entries(self, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a paginated list of collaboration whitelist entries that specify allowed email domains for collaboration within the enterprise.
+        List allowed collaboration domains
 
         Args:
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a collection of domains that are allowed for collaboration.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Domain restrictions for collaborations
@@ -6888,11 +10080,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_collaboration_whitelist_entries(self, domain=None, direction=None) -> dict[str, Any]:
+    def create_collaboration_whitelist_entry(self, domain: Optional[str] = None, direction: Optional[str] = None) -> dict[str, Any]:
         """
-        Creates a collaboration whitelist entry to specify allowed domains and directions for repository collaboration.
+        Add domain to list of allowed collaboration domains
 
         Args:
             domain (string): The domain to add to the list of allowed domains. Example: 'example.com'.
@@ -6901,23 +10098,33 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new entry on the list of allowed domains.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Domain restrictions for collaborations
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'domain': domain,
             'direction': direction,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/collaboration_whitelist_entries"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_collaboration_whitelist_entries_id(self, collaboration_whitelist_entry_id) -> dict[str, Any]:
+    def get_whitelist_entry_by_id(self, collaboration_whitelist_entry_id: str) -> dict[str, Any]:
         """
-        Retrieves information about a specific collaboration whitelist entry identified by its ID.
+        Get allowed collaboration domain
 
         Args:
             collaboration_whitelist_entry_id (string): collaboration_whitelist_entry_id
@@ -6925,20 +10132,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns an entry on the list of allowed domains.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Domain restrictions for collaborations
         """
         if collaboration_whitelist_entry_id is None:
-            raise ValueError("Missing required parameter 'collaboration_whitelist_entry_id'")
+            raise ValueError("Missing required parameter 'collaboration_whitelist_entry_id'.")
         url = f"{self.base_url}/collaboration_whitelist_entries/{collaboration_whitelist_entry_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_collaboration_whitelist_entries_id(self, collaboration_whitelist_entry_id) -> Any:
+    def delete_collaboration_whitelist_entry_by_id(self, collaboration_whitelist_entry_id: str) -> Any:
         """
-        Deletes a specific collaboration whitelist entry identified by its ID using the DELETE method, returning a status code indicating successful removal.
+        Remove domain from list of allowed collaboration domains
 
         Args:
             collaboration_whitelist_entry_id (string): collaboration_whitelist_entry_id
@@ -6947,28 +10163,43 @@ class BoxApp(APIApplication):
             Any: A blank response is returned if the entry was
         successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Domain restrictions for collaborations
         """
         if collaboration_whitelist_entry_id is None:
-            raise ValueError("Missing required parameter 'collaboration_whitelist_entry_id'")
+            raise ValueError("Missing required parameter 'collaboration_whitelist_entry_id'.")
         url = f"{self.base_url}/collaboration_whitelist_entries/{collaboration_whitelist_entry_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_collaboration_whitelist_exempt_targets(self, marker=None, limit=None) -> dict[str, Any]:
+    def list_whitelist_targets(self, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of users who are exempt from the collaboration whitelist using the Box API.
+        List users exempt from collaboration domain restrictions
 
         Args:
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a collection of user exemptions.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Domain restrictions (User exemptions)
@@ -6977,11 +10208,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_collaboration_whitelist_exempt_targets(self, user=None) -> dict[str, Any]:
+    def create_collaboration_whitelist_exempt_target(self, user: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Creates a new collaboration whitelist exempt target, allowing specified users or entities to bypass collaboration whitelist domain restrictions.
+        Create user exemption from collaboration domain restrictions
 
         Args:
             user (object): The user to exempt.
@@ -6989,22 +10225,32 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a new exemption entry.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Domain restrictions (User exemptions)
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'user': user,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/collaboration_whitelist_exempt_targets"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_collaboration_whitelist_exempt_targets_id(self, collaboration_whitelist_exempt_target_id) -> dict[str, Any]:
+    def get_exempt_target_by_id(self, collaboration_whitelist_exempt_target_id: str) -> dict[str, Any]:
         """
-        Retrieves details of a specific collaboration whitelist exempt target identified by its ID.
+        Get user exempt from collaboration domain restrictions
 
         Args:
             collaboration_whitelist_exempt_target_id (string): collaboration_whitelist_exempt_target_id
@@ -7012,20 +10258,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the user's exempted from the list of collaboration domains.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Domain restrictions (User exemptions)
         """
         if collaboration_whitelist_exempt_target_id is None:
-            raise ValueError("Missing required parameter 'collaboration_whitelist_exempt_target_id'")
+            raise ValueError("Missing required parameter 'collaboration_whitelist_exempt_target_id'.")
         url = f"{self.base_url}/collaboration_whitelist_exempt_targets/{collaboration_whitelist_exempt_target_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_collaboration_whitelist_exempt_targets_id(self, collaboration_whitelist_exempt_target_id) -> Any:
+    def delete_collab_whitelist_exempt_target_by_id(self, collaboration_whitelist_exempt_target_id: str) -> Any:
         """
-        Removes a specific collaboration whitelist exemption by ID, revoking the target's exemption from domain restrictions using the Box API.
+        Remove user from list of users exempt from domain restrictions
 
         Args:
             collaboration_whitelist_exempt_target_id (string): collaboration_whitelist_exempt_target_id
@@ -7034,35 +10289,52 @@ class BoxApp(APIApplication):
             Any: A blank response is returned if the exemption was
         successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Domain restrictions (User exemptions)
         """
         if collaboration_whitelist_exempt_target_id is None:
-            raise ValueError("Missing required parameter 'collaboration_whitelist_exempt_target_id'")
+            raise ValueError("Missing required parameter 'collaboration_whitelist_exempt_target_id'.")
         url = f"{self.base_url}/collaboration_whitelist_exempt_targets/{collaboration_whitelist_exempt_target_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_storage_policies(self, fields=None, marker=None, limit=None) -> dict[str, Any]:
+    def get_storage_policies(self, fields: Optional[List[str]] = None, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of storage policies with optional filtering, pagination, and field selection parameters.
+        List storage policies
 
         Args:
             fields (array): A comma-separated list of attributes to include in the
         response. This can be used to request fields that are
-        not normally returned in a standard response. Be aware that specifying this parameter will have the
+        not normally returned in a standard response.
+
+        Be aware that specifying this parameter will have the
         effect that none of the standard fields are returned in
         the response unless explicitly specified, instead only
         fields for the mini representation are returned, additional
         to the fields requested. Example: "['id', 'type', 'name']".
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a collection of storage policies.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Standard and Zones Storage Policies
@@ -7071,11 +10343,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('fields', fields), ('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_storage_policies_id(self, storage_policy_id) -> dict[str, Any]:
+    def get_storage_policies_id(self, storage_policy_id: str) -> dict[str, Any]:
         """
-        Retrieves detailed information about a specific storage policy identified by its storage_policy_id.
+        Get storage policy
 
         Args:
             storage_policy_id (string): storage_policy_id
@@ -7083,30 +10360,45 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a storage policy object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Standard and Zones Storage Policies
         """
         if storage_policy_id is None:
-            raise ValueError("Missing required parameter 'storage_policy_id'")
+            raise ValueError("Missing required parameter 'storage_policy_id'.")
         url = f"{self.base_url}/storage_policies/{storage_policy_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_storage_policy_assignments(self, resolved_for_type, resolved_for_id, marker=None) -> dict[str, Any]:
+    def get_storage_policy_assignments(self, resolved_for_type: str, resolved_for_id: str, marker: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a list of storage policy assignments with optional pagination and filtering by resolved type and ID.
+        List storage policy assignments
 
         Args:
             resolved_for_type (string): The target type to return assignments for Example: 'user'.
             resolved_for_id (string): The ID of the user or enterprise to return assignments for Example: '984322'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
 
         Returns:
             dict[str, Any]: Returns a collection of storage policies for
         the enterprise or user.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Standard and Zones Storage Policy Assignments
@@ -7115,11 +10407,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('marker', marker), ('resolved_for_type', resolved_for_type), ('resolved_for_id', resolved_for_id)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_storage_policy_assignments(self, storage_policy=None, assigned_to=None) -> dict[str, Any]:
+    def create_storage_policy_assignment(self, storage_policy: Optional[dict[str, Any]] = None, assigned_to: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Creates a new storage policy assignment to a user or enterprise.
+        Assign storage policy
 
         Args:
             storage_policy (object): The storage policy to assign to the user or
@@ -7130,23 +10427,33 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the new storage policy assignment created.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Standard and Zones Storage Policy Assignments
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'storage_policy': storage_policy,
             'assigned_to': assigned_to,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/storage_policy_assignments"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_storage_policy_assignments_id(self, storage_policy_assignment_id) -> dict[str, Any]:
+    def get_storage_policy_assignment(self, storage_policy_assignment_id: str) -> dict[str, Any]:
         """
-        Retrieves details of a specific storage policy assignment identified by its storage_policy_assignment_id.
+        Get storage policy assignment
 
         Args:
             storage_policy_assignment_id (string): storage_policy_assignment_id
@@ -7154,20 +10461,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a storage policy assignment object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Standard and Zones Storage Policy Assignments
         """
         if storage_policy_assignment_id is None:
-            raise ValueError("Missing required parameter 'storage_policy_assignment_id'")
+            raise ValueError("Missing required parameter 'storage_policy_assignment_id'.")
         url = f"{self.base_url}/storage_policy_assignments/{storage_policy_assignment_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_storage_policy_assignments_id(self, storage_policy_assignment_id, storage_policy=None) -> dict[str, Any]:
+    def update_storage_policy_assignment(self, storage_policy_assignment_id: str, storage_policy: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Updates an existing storage policy assignment identified by storage_policy_assignment_id with new settings or configurations.
+        Update storage policy assignment
 
         Args:
             storage_policy_assignment_id (string): storage_policy_assignment_id
@@ -7177,24 +10493,34 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns an updated storage policy assignment object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Standard and Zones Storage Policy Assignments
         """
         if storage_policy_assignment_id is None:
-            raise ValueError("Missing required parameter 'storage_policy_assignment_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'storage_policy_assignment_id'.")
+        request_body_data = None
+        request_body_data = {
             'storage_policy': storage_policy,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/storage_policy_assignments/{storage_policy_assignment_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_storage_policy_assignments_id(self, storage_policy_assignment_id) -> Any:
+    def delete_storage_policy_assignment(self, storage_policy_assignment_id: str) -> Any:
         """
-        Deletes a storage policy assignment identified by its ID, causing the user to inherit the enterprise's default storage policy.
+        Unassign storage policy
 
         Args:
             storage_policy_assignment_id (string): storage_policy_assignment_id
@@ -7203,20 +10529,29 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the storage policy
         assignment is successfully deleted.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Standard and Zones Storage Policy Assignments
         """
         if storage_policy_assignment_id is None:
-            raise ValueError("Missing required parameter 'storage_policy_assignment_id'")
+            raise ValueError("Missing required parameter 'storage_policy_assignment_id'.")
         url = f"{self.base_url}/storage_policy_assignments/{storage_policy_assignment_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_zip_downloads(self, items=None, download_file_name=None) -> dict[str, Any]:
+    def post_zip_downloads(self, items: Optional[List[dict[str, Any]]] = None, download_file_name: Optional[str] = None) -> dict[str, Any]:
         """
-        Creates a downloadable ZIP archive based on the provided input data and initiates the download process.
+        Create zip download
 
         Args:
             items (array): A list of items to add to the `zip` archive. These can
@@ -7229,23 +10564,33 @@ class BoxApp(APIApplication):
         response that will include a `download_url`, a `status_url`, as well as
         any conflicts that might have occurred when creating the request.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Zip Downloads
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'items': items,
             'download_file_name': download_file_name,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/zip_downloads"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_zip_downloads_id_content(self, zip_download_id) -> Any:
+    def get_zip_downloads_id_content(self, zip_download_id: str) -> Any:
         """
-        Retrieves the content of a specific zip download identified by the `zip_download_id`.
+        Download zip archive
 
         Args:
             zip_download_id (string): zip_download_id
@@ -7254,20 +10599,29 @@ class BoxApp(APIApplication):
             Any: Returns the content of the items requested for this download, formatted as
         a stream of files and folders in a `zip` archive.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Zip Downloads
         """
         if zip_download_id is None:
-            raise ValueError("Missing required parameter 'zip_download_id'")
+            raise ValueError("Missing required parameter 'zip_download_id'.")
         url = f"{self.base_url}/zip_downloads/{zip_download_id}/content"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_zip_downloads_id_status(self, zip_download_id) -> dict[str, Any]:
+    def get_zip_downloads_id_status(self, zip_download_id: str) -> dict[str, Any]:
         """
-        Retrieves the status of a specific zip download identified by the zip_download_id using the GET method.
+        Get zip download status
 
         Args:
             zip_download_id (string): zip_download_id
@@ -7275,20 +10629,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the status of the `zip` archive that is being downloaded.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Zip Downloads
         """
         if zip_download_id is None:
-            raise ValueError("Missing required parameter 'zip_download_id'")
+            raise ValueError("Missing required parameter 'zip_download_id'.")
         url = f"{self.base_url}/zip_downloads/{zip_download_id}/status"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_sign_requests_id_cancel(self, sign_request_id) -> dict[str, Any]:
+    def post_sign_requests_id_cancel(self, sign_request_id: str) -> dict[str, Any]:
         """
-        Cancels an incomplete sign request using the provided sign request ID, preventing further signatures from being added.
+        Cancel Box Sign request
 
         Args:
             sign_request_id (string): sign_request_id
@@ -7296,20 +10659,30 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a Sign Request object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Box Sign requests
         """
         if sign_request_id is None:
-            raise ValueError("Missing required parameter 'sign_request_id'")
+            raise ValueError("Missing required parameter 'sign_request_id'.")
+        request_body_data = None
         url = f"{self.base_url}/sign_requests/{sign_request_id}/cancel"
         query_params = {}
-        response = self._post(url, data={}, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_sign_requests_id_resend(self, sign_request_id) -> Any:
+    def post_sign_requests_id_resend(self, sign_request_id: str) -> Any:
         """
-        Resends a specified sign request identified by sign_request_id and returns a status indicating the outcome.
+        Resend Box Sign request
 
         Args:
             sign_request_id (string): sign_request_id
@@ -7318,20 +10691,30 @@ class BoxApp(APIApplication):
             Any: Returns an empty response when the API call was successful.
         The email notifications will be sent asynchronously.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Box Sign requests
         """
         if sign_request_id is None:
-            raise ValueError("Missing required parameter 'sign_request_id'")
+            raise ValueError("Missing required parameter 'sign_request_id'.")
+        request_body_data = None
         url = f"{self.base_url}/sign_requests/{sign_request_id}/resend"
         query_params = {}
-        response = self._post(url, data={}, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_sign_requests_id(self, sign_request_id) -> dict[str, Any]:
+    def get_sign_requests_id(self, sign_request_id: str) -> dict[str, Any]:
         """
-        Retrieves the details of a specific sign request using the provided sign request identifier.
+        Get Box Sign request by ID
 
         Args:
             sign_request_id (string): sign_request_id
@@ -7339,24 +10722,35 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a signature request.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Box Sign requests
         """
         if sign_request_id is None:
-            raise ValueError("Missing required parameter 'sign_request_id'")
+            raise ValueError("Missing required parameter 'sign_request_id'.")
         url = f"{self.base_url}/sign_requests/{sign_request_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_sign_requests(self, marker=None, limit=None, senders=None, shared_requests=None) -> dict[str, Any]:
+    def get_sign_requests(self, marker: Optional[str] = None, limit: Optional[int] = None, senders: Optional[List[str]] = None, shared_requests: Optional[bool] = None) -> dict[str, Any]:
         """
-        Retrieves a list of sign requests filtered by optional parameters such as marker, limit, senders, and shared requests.
+        List Box Sign requests
 
         Args:
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             senders (array): A list of sender emails to filter the signature requests by sender.
         If provided, `shared_requests` must be set to `true`. Example: "['sender1@boxdemo.com', 'sender2@boxdemo.com']".
@@ -7368,6 +10762,10 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a collection of sign requests
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Box Sign requests
         """
@@ -7375,11 +10773,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('marker', marker), ('limit', limit), ('senders', senders), ('shared_requests', shared_requests)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_sign_requests(self, is_document_preparation_needed=None, redirect_url=None, declined_redirect_url=None, are_text_signatures_enabled=None, email_subject=None, email_message=None, are_reminders_enabled=None, name=None, prefill_tags=None, days_valid=None, external_id=None, template_id=None, external_system_name=None, source_files=None, signature_color=None, signers=None, parent_folder=None) -> dict[str, Any]:
+    def post_sign_requests(self, is_document_preparation_needed: Optional[bool] = None, redirect_url: Optional[str] = None, declined_redirect_url: Optional[str] = None, are_text_signatures_enabled: Optional[bool] = None, email_subject: Optional[str] = None, email_message: Optional[str] = None, are_reminders_enabled: Optional[bool] = None, name: Optional[str] = None, prefill_tags: Optional[List[dict[str, Any]]] = None, days_valid: Optional[int] = None, external_id: Optional[str] = None, template_id: Optional[str] = None, external_system_name: Optional[str] = None, source_files: Optional[List[dict[str, Any]]] = None, signature_color: Optional[str] = None, signers: Optional[List[dict[str, Any]]] = None, parent_folder: Optional[Any] = None) -> dict[str, Any]:
         """
-        Submits data to generate a signed request and returns a confirmation response.
+        Create Box Sign request
 
         Args:
             is_document_preparation_needed (boolean): Indicates if the sender should receive a `prepare_url` in the response to complete document preparation using the UI. Example: 'True'.
@@ -7410,10 +10813,15 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a Box Sign request object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Box Sign requests
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'is_document_preparation_needed': is_document_preparation_needed,
             'redirect_url': redirect_url,
             'declined_redirect_url': declined_redirect_url,
@@ -7432,31 +10840,46 @@ class BoxApp(APIApplication):
             'signers': signers,
             'parent_folder': parent_folder,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/sign_requests"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_workflows(self, folder_id, trigger_type=None, limit=None, marker=None) -> dict[str, Any]:
+    def get_workflows(self, folder_id: str, trigger_type: Optional[str] = None, limit: Optional[int] = None, marker: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a list of workflows filtered by folder ID, trigger type, and pagination controls (limit and marker) using the GET method at the "/workflows" endpoint.
+        List workflows
 
         Args:
-            folder_id (string): The unique identifier that represent a folder. The ID for any folder can be determined
+            folder_id (string): The unique identifier that represent a folder.
+
+        The ID for any folder can be determined
         by visiting this folder in the web application
         and copying the ID from the URL. For example,
-        for the URL `
-        the `folder_id` is `123`. The root folder of a Box account is
+        for the URL `https://*.app.box.com/folder/123`
+        the `folder_id` is `123`.
+
+        The root folder of a Box account is
         always represented by the ID `0`. Example: '12345'.
             trigger_type (string): Type of trigger to search for. Example: 'WORKFLOW_MANUAL_START'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
 
         Returns:
             dict[str, Any]: Returns the workflow.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Workflows
@@ -7465,11 +10888,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('folder_id', folder_id), ('trigger_type', trigger_type), ('limit', limit), ('marker', marker)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_workflows_id_start(self, workflow_id, type=None, flow=None, files=None, folder=None, outcomes=None) -> Any:
+    def post_workflows_id_start(self, workflow_id: str, type: Optional[str] = None, flow: Optional[dict[str, Any]] = None, files: Optional[List[dict[str, Any]]] = None, folder: Optional[dict[str, Any]] = None, outcomes: Optional[List[dict[str, Any]]] = None) -> Any:
         """
-        Starts the specified workflow identified by workflow_id via a POST request, triggering its execution without returning content.
+        Starts workflow based on request body
 
         Args:
             workflow_id (string): workflow_id
@@ -7483,36 +10911,52 @@ class BoxApp(APIApplication):
         Returns:
             Any: Starts the workflow.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Workflows
         """
         if workflow_id is None:
-            raise ValueError("Missing required parameter 'workflow_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'workflow_id'.")
+        request_body_data = None
+        request_body_data = {
             'type': type,
             'flow': flow,
             'files': files,
             'folder': folder,
             'outcomes': outcomes,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/workflows/{workflow_id}/start"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_sign_templates(self, marker=None, limit=None) -> dict[str, Any]:
+    def get_sign_templates(self, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a list of sign templates, allowing pagination through the use of a marker and a limit parameter to control the number of results returned.
+        List Box Sign templates
 
         Args:
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
 
         Returns:
             dict[str, Any]: Returns a collection of templates.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
 
         Tags:
             Box Sign templates
@@ -7521,11 +10965,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_sign_templates_id(self, template_id) -> dict[str, Any]:
+    def get_sign_templates_id(self, template_id: str) -> dict[str, Any]:
         """
-        Retrieves details of a specific sign template identified by the provided `template_id` using the GET method.
+        Get Box Sign template by ID
 
         Args:
             template_id (string): template_id
@@ -7533,24 +10982,35 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns details of a template.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Box Sign templates
         """
         if template_id is None:
-            raise ValueError("Missing required parameter 'template_id'")
+            raise ValueError("Missing required parameter 'template_id'.")
         url = f"{self.base_url}/sign_templates/{template_id}"
         query_params = {}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_integration_mappings_slack(self, marker=None, limit=None, partner_item_type=None, partner_item_id=None, box_item_id=None, box_item_type=None, is_manually_created=None) -> dict[str, Any]:
+    def get_integration_mappings_slack(self, marker: Optional[str] = None, limit: Optional[int] = None, partner_item_type: Optional[str] = None, partner_item_id: Optional[str] = None, box_item_id: Optional[str] = None, box_item_type: Optional[str] = None, is_manually_created: Optional[bool] = None) -> dict[str, Any]:
         """
-        Retrieves a list of Slack integration mappings with optional filtering by marker, limit, partner and Box item types and IDs, and manual creation status.
+        List Slack integration mappings
 
         Args:
             marker (string): Defines the position marker at which to begin returning results. This is
-        used when paginating using marker-based pagination. This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
             limit (integer): The maximum number of items to return per page. Example: '1000'.
             partner_item_type (string): Mapped item type, for which the mapping should be returned Example: 'channel'.
             partner_item_id (string): ID of the mapped item, for which the mapping should be returned Example: '12345'.
@@ -7561,6 +11021,10 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a collection of integration mappings
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Integration mappings
         """
@@ -7568,11 +11032,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('marker', marker), ('limit', limit), ('partner_item_type', partner_item_type), ('partner_item_id', partner_item_id), ('box_item_id', box_item_id), ('box_item_type', box_item_type), ('is_manually_created', is_manually_created)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_integration_mappings_slack(self, partner_item=None, box_item=None, options=None) -> dict[str, Any]:
+    def create_slack_mapping(self, partner_item: Optional[Any] = None, box_item: Optional[Any] = None, options: Optional[Any] = None) -> dict[str, Any]:
         """
-        Creates a Slack integration mapping by associating a Slack channel with a Box item using the POST method.
+        Create Slack integration mapping
 
         Args:
             partner_item (string): partner_item
@@ -7582,24 +11051,34 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the created integration mapping.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Integration mappings
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'partner_item': partner_item,
             'box_item': box_item,
             'options': options,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/integration_mappings/slack"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_integration_mappings_slack_id(self, integration_mapping_id, box_item=None, options=None) -> dict[str, Any]:
+    def update_slack_integration_mapping_by_id(self, integration_mapping_id: str, box_item: Optional[Any] = None, options: Optional[Any] = None) -> dict[str, Any]:
         """
-        Updates an existing Slack integration mapping by modifying the mapping identified by the specified `integration_mapping_id`.
+        Update Slack integration mapping
 
         Args:
             integration_mapping_id (string): integration_mapping_id
@@ -7609,25 +11088,35 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the updated integration mapping object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Integration mappings
         """
         if integration_mapping_id is None:
-            raise ValueError("Missing required parameter 'integration_mapping_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'integration_mapping_id'.")
+        request_body_data = None
+        request_body_data = {
             'box_item': box_item,
             'options': options,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/integration_mappings/slack/{integration_mapping_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_integration_mappings_slack_id(self, integration_mapping_id) -> Any:
+    def delete_slack_mapping_by_id(self, integration_mapping_id: str) -> Any:
         """
-        Deletes the Slack integration mapping identified by the integration_mapping_id, removing the link between the Slack channel and the Box folder without deleting either the folder or the channel.
+        Delete Slack integration mapping
 
         Args:
             integration_mapping_id (string): integration_mapping_id
@@ -7635,20 +11124,29 @@ class BoxApp(APIApplication):
         Returns:
             Any: Empty body in response
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Integration mappings
         """
         if integration_mapping_id is None:
-            raise ValueError("Missing required parameter 'integration_mapping_id'")
+            raise ValueError("Missing required parameter 'integration_mapping_id'.")
         url = f"{self.base_url}/integration_mappings/slack/{integration_mapping_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_integration_mappings_teams(self, partner_item_type=None, partner_item_id=None, box_item_id=None, box_item_type=None) -> dict[str, Any]:
+    def get_integration_mappings_teams(self, partner_item_type: Optional[str] = None, partner_item_id: Optional[str] = None, box_item_id: Optional[str] = None, box_item_type: Optional[str] = None) -> dict[str, Any]:
         """
-        Retrieves a list of Teams integration mappings in an enterprise, allowing filtering by partner item type, partner item ID, Box item ID, and Box item type.
+        List Teams integration mappings
 
         Args:
             partner_item_type (string): Mapped item type, for which the mapping should be returned Example: 'channel'.
@@ -7659,6 +11157,10 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns a collection of integration mappings
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Integration mappings
         """
@@ -7666,11 +11168,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('partner_item_type', partner_item_type), ('partner_item_id', partner_item_id), ('box_item_id', box_item_id), ('box_item_type', box_item_type)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_integration_mappings_teams(self, partner_item=None, box_item=None) -> dict[str, Any]:
+    def create_integration_mapping_team(self, partner_item: Optional[Any] = None, box_item: Optional[Any] = None) -> dict[str, Any]:
         """
-        Creates a Microsoft Teams integration mapping by linking a Teams channel to a Box item using the Box API.
+        Create Teams integration mapping
 
         Args:
             partner_item (string): partner_item
@@ -7679,23 +11186,33 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the created integration mapping.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Integration mappings
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'partner_item': partner_item,
             'box_item': box_item,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/integration_mappings/teams"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_integration_mappings_teams_id(self, integration_mapping_id, box_item=None) -> dict[str, Any]:
+    def update_integration_mapping_team(self, integration_mapping_id: str, box_item: Optional[Any] = None) -> dict[str, Any]:
         """
-        Updates an existing Teams integration mapping identified by the provided `integration_mapping_id` using the Box API.
+        Update Teams integration mapping
 
         Args:
             integration_mapping_id (string): integration_mapping_id
@@ -7704,24 +11221,34 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Returns the updated integration mapping object.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Integration mappings
         """
         if integration_mapping_id is None:
-            raise ValueError("Missing required parameter 'integration_mapping_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'integration_mapping_id'.")
+        request_body_data = None
+        request_body_data = {
             'box_item': box_item,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/integration_mappings/teams/{integration_mapping_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_integration_mappings_teams_id(self, integration_mapping_id) -> Any:
+    def delete_integration_mapping_by_id(self, integration_mapping_id: str) -> Any:
         """
-        Deletes a Teams integration mapping identified by the integration_mapping_id, removing the link between a Teams channel and a Box folder without deleting either resource.
+        Delete Teams integration mapping
 
         Args:
             integration_mapping_id (string): integration_mapping_id
@@ -7729,20 +11256,29 @@ class BoxApp(APIApplication):
         Returns:
             Any: Empty body in response
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             Integration mappings
         """
         if integration_mapping_id is None:
-            raise ValueError("Missing required parameter 'integration_mapping_id'")
+            raise ValueError("Missing required parameter 'integration_mapping_id'.")
         url = f"{self.base_url}/integration_mappings/teams/{integration_mapping_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_ai_ask(self, mode=None, prompt=None, items=None, dialogue_history=None, include_citations=None, ai_agent=None) -> dict[str, Any]:
+    def post_ai_ask(self, mode: Optional[str] = None, prompt: Optional[str] = None, items: Optional[List[dict[str, Any]]] = None, dialogue_history: Optional[List[dict[str, Any]]] = None, include_citations: Optional[bool] = None, ai_agent: Optional[Any] = None) -> dict[str, Any]:
         """
-        Processes AI-based questions submitted via POST requests to provide relevant answers or responses.
+        Ask question
 
         Args:
             mode (string): Box AI handles text documents with text representations up to 1MB in size, or a maximum of 25 files, whichever comes first. If the text file size exceeds 1MB, the first 1MB of text representation will be processed. Box AI handles image documents with a resolution of 1024 x 1024 pixels, with a maximum of 5 images or 5 pages for multi-page images. If the number of image or image pages exceeds 5, the first 5 images or pages will be processed. If you set mode parameter to `single_item_qa`, the items array can have one element only. Currently Box AI does not support multi-modal requests. If both images and text are sent Box AI will only process the text. Example: 'multiple_item_qa'.
@@ -7755,10 +11291,15 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: A successful response including the answer from the LLM.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             AI
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'mode': mode,
             'prompt': prompt,
             'items': items,
@@ -7766,16 +11307,21 @@ class BoxApp(APIApplication):
             'include_citations': include_citations,
             'ai_agent': ai_agent,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/ai/ask"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_ai_text_gen(self, prompt=None, items=None, dialogue_history=None, ai_agent=None) -> dict[str, Any]:
+    def post_ai_text_gen(self, prompt: Optional[str] = None, items: Optional[List[dict[str, Any]]] = None, dialogue_history: Optional[List[dict[str, Any]]] = None, ai_agent: Optional[Any] = None) -> dict[str, Any]:
         """
-        Generates text based on a given prompt using a specified model, returning the generated text as a response.
+        Generate text
 
         Args:
             prompt (string): The prompt provided by the client to be answered by the LLM. The prompt's length is limited to 10000 characters. Example: 'Write an email to a client about the importance of public APIs.'.
@@ -7790,25 +11336,35 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: A successful response including the answer from the LLM.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             AI
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'prompt': prompt,
             'items': items,
             'dialogue_history': dialogue_history,
             'ai_agent': ai_agent,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/ai/text_gen"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_ai_agent_default(self, mode, language=None, model=None) -> Any:
+    def get_ai_agent_default(self, mode: str, language: Optional[str] = None, model: Optional[str] = None) -> Any:
         """
-        Retrieves the default configuration settings for AI services, allowing clients to obtain parameters such as mode, language, and model for use or customization.
+        Get AI agent default configuration
 
         Args:
             mode (string): The mode to filter the agent config to return. Example: 'ask'.
@@ -7825,6 +11381,10 @@ class BoxApp(APIApplication):
         * AI agent for structured metadata extraction.
         The response depends on the agent configuration requested in this endpoint.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             AI
         """
@@ -7832,11 +11392,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('mode', mode), ('language', language), ('model', model)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_ai_extract(self, prompt=None, items=None, ai_agent=None) -> dict[str, Any]:
+    def post_ai_extract(self, prompt: Optional[str] = None, items: Optional[List[dict[str, Any]]] = None, ai_agent: Optional[Any] = None) -> dict[str, Any]:
         """
-        Extracts relevant data from specified sources using AI-powered text extraction techniques, returning clean and structured information based on the provided parameters.
+        Extract metadata (freeform)
 
         Args:
             prompt (string): The prompt provided to a Large Language Model (LLM) in the request. The prompt can be up to 10000 characters long and it can be an XML or a JSON schema. Example: '\\"fields\\":[{\\"type\\":\\"string\\",\\"key\\":\\"name\\",\\"displayName\\":\\"Name\\",\\"description\\":\\"The customer name\\",\\"prompt\\":\\"Name is always the first word in the document\\"},{\\"type\\":\\"date\\",\\"key\\":\\"last_contacted_at\\",\\"displayName\\":\\"Last Contacted At\\",\\"description\\":\\"When this customer was last contacted at\\"}]'.
@@ -7846,24 +11411,34 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: A response including the answer from the LLM.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             AI
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'prompt': prompt,
             'items': items,
             'ai_agent': ai_agent,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/ai/extract"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_ai_extract_structured(self, items=None, metadata_template=None, fields=None, ai_agent=None) -> dict[str, Any]:
+    def post_ai_extract_structured(self, items: Optional[List[dict[str, Any]]] = None, metadata_template: Optional[dict[str, Any]] = None, fields: Optional[List[dict[str, Any]]] = None, ai_agent: Optional[Any] = None) -> dict[str, Any]:
         """
-        Extracts structured data from unstructured sources using AI-powered techniques, returning formatted data in a predefined schema.
+        Extract metadata (structured)
 
         Args:
             items (array): The items to be processed by the LLM. Currently you can use files only.
@@ -7876,25 +11451,35 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: A successful response including the answer from the LLM.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             AI
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'items': items,
             'metadata_template': metadata_template,
             'fields': fields,
             'ai_agent': ai_agent,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/ai/extract_structured"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_ai_agents(self, mode=None, fields=None, agent_state=None, include_box_default=None, marker=None, limit=None) -> dict[str, Any]:
+    def get_ai_agents(self, mode: Optional[List[str]] = None, fields: Optional[List[str]] = None, agent_state: Optional[List[str]] = None, include_box_default: Optional[bool] = None, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
         """
-        Retrieves a filtered and paginated list of AI agents with optional parameters to specify mode, fields, agent state, inclusion of default box settings, marker, and limit.
+        List AI agents
 
         Args:
             mode (array): The mode to filter the agent config to return. Possible values are: `ask`, `text_gen`, and `extract`. Example: "['ask', 'text_gen', 'extract']".
@@ -7907,6 +11492,10 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: A successful response including the agents list.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             AI Studio
         """
@@ -7914,11 +11503,16 @@ class BoxApp(APIApplication):
         query_params = {k: v for k, v in [('mode', mode), ('fields', fields), ('agent_state', agent_state), ('include_box_default', include_box_default), ('marker', marker), ('limit', limit)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def post_ai_agents(self, type=None, name=None, access_state=None, icon_reference=None, allowed_entities=None, ask=None, text_gen=None, extract=None) -> dict[str, Any]:
+    def post_ai_agents(self, type: Optional[str] = None, name: Optional[str] = None, access_state: Optional[str] = None, icon_reference: Optional[str] = None, allowed_entities: Optional[List[dict[str, Any]]] = None, ask: Optional[dict[str, Any]] = None, text_gen: Optional[dict[str, Any]] = None, extract: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Creates an AI agent instance using the POST method at the "/ai_agents" endpoint, enabling integration of AI functionalities into applications.
+        Create AI agent
 
         Args:
             type (string): The type of agent used to handle queries. Example: 'ai_agent'.
@@ -7934,10 +11528,15 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Definition of created AI agent.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             AI Studio
         """
-        request_body = {
+        request_body_data = None
+        request_body_data = {
             'type': type,
             'name': name,
             'access_state': access_state,
@@ -7947,16 +11546,21 @@ class BoxApp(APIApplication):
             'text_gen': text_gen,
             'extract': extract,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/ai_agents"
         query_params = {}
-        response = self._post(url, data=request_body, params=query_params)
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def put_ai_agents_id(self, agent_id, type=None, name=None, access_state=None, icon_reference=None, allowed_entities=None, ask=None, text_gen=None, extract=None) -> dict[str, Any]:
+    def put_ai_agents_id(self, agent_id: str, type: Optional[str] = None, name: Optional[str] = None, access_state: Optional[str] = None, icon_reference: Optional[str] = None, allowed_entities: Optional[List[dict[str, Any]]] = None, ask: Optional[dict[str, Any]] = None, text_gen: Optional[dict[str, Any]] = None, extract: Optional[dict[str, Any]] = None) -> dict[str, Any]:
         """
-        Updates the configuration or details of an AI agent identified by agent_id using the PUT method.
+        Update AI agent
 
         Args:
             agent_id (string): agent_id
@@ -7973,12 +11577,17 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: Definition of created AI agent.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             AI Studio
         """
         if agent_id is None:
-            raise ValueError("Missing required parameter 'agent_id'")
-        request_body = {
+            raise ValueError("Missing required parameter 'agent_id'.")
+        request_body_data = None
+        request_body_data = {
             'type': type,
             'name': name,
             'access_state': access_state,
@@ -7988,16 +11597,21 @@ class BoxApp(APIApplication):
             'text_gen': text_gen,
             'extract': extract,
         }
-        request_body = {k: v for k, v in request_body.items() if v is not None}
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
         url = f"{self.base_url}/ai_agents/{agent_id}"
         query_params = {}
-        response = self._put(url, data=request_body, params=query_params)
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def get_ai_agents_id(self, agent_id, fields=None) -> dict[str, Any]:
+    def get_ai_agents_id(self, agent_id: str, fields: Optional[List[str]] = None) -> dict[str, Any]:
         """
-        Retrieves information about a specific AI agent identified by its ID and optionally includes additional fields specified in the query parameters.
+        Get AI agent by agent ID
 
         Args:
             agent_id (string): agent_id
@@ -8006,20 +11620,29 @@ class BoxApp(APIApplication):
         Returns:
             dict[str, Any]: A successful response including the agent.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             AI Studio
         """
         if agent_id is None:
-            raise ValueError("Missing required parameter 'agent_id'")
+            raise ValueError("Missing required parameter 'agent_id'.")
         url = f"{self.base_url}/ai_agents/{agent_id}"
         query_params = {k: v for k, v in [('fields', fields)] if v is not None}
         response = self._get(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
-    def delete_ai_agents_id(self, agent_id) -> Any:
+    def delete_ai_agents_id(self, agent_id: str) -> Any:
         """
-        Deletes an AI agent identified by the provided agent ID using the DELETE method and returns a status indicating the outcome of the operation.
+        Delete AI agent
 
         Args:
             agent_id (string): agent_id
@@ -8027,33 +11650,546 @@ class BoxApp(APIApplication):
         Returns:
             Any: A successful response with no content.
 
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
         Tags:
             AI Studio
         """
         if agent_id is None:
-            raise ValueError("Missing required parameter 'agent_id'")
+            raise ValueError("Missing required parameter 'agent_id'.")
         url = f"{self.base_url}/ai_agents/{agent_id}"
         query_params = {}
         response = self._delete(url, params=query_params)
         response.raise_for_status()
-        return response.json()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def post_docgen_templates_v(self, file: Any) -> dict[str, Any]:
+        """
+        Create Box Doc Gen template
+
+        Args:
+            file (string): file
+
+        Returns:
+            dict[str, Any]: The file which has now been marked as a Box Doc Gen template.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Box Doc Gen templates
+        """
+        request_body_data = None
+        request_body_data = {
+            'file': file,
+        }
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
+        url = f"{self.base_url}/docgen_templates"
+        query_params = {}
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def get_docgen_templates_v(self, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
+        """
+        List Box Doc Gen templates
+
+        Args:
+            marker (string): Defines the position marker at which to begin returning results. This is
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+            limit (integer): The maximum number of items to return per page. Example: '1000'.
+
+        Returns:
+            dict[str, Any]: Returns a collection of templates.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Box Doc Gen templates
+        """
+        url = f"{self.base_url}/docgen_templates"
+        query_params = {k: v for k, v in [('marker', marker), ('limit', limit)] if v is not None}
+        response = self._get(url, params=query_params)
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def delete_template_by_id(self, template_id: str) -> Any:
+        """
+        Delete Box Doc Gen template
+
+        Args:
+            template_id (string): template_id
+
+        Returns:
+            Any: Returns an empty response when a file is no longer marked as a Box Doc Gen template.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Box Doc Gen templates
+        """
+        if template_id is None:
+            raise ValueError("Missing required parameter 'template_id'.")
+        url = f"{self.base_url}/docgen_templates/{template_id}"
+        query_params = {}
+        response = self._delete(url, params=query_params)
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def get_docgen_template_by_id(self, template_id: str) -> dict[str, Any]:
+        """
+        Get Box Doc Gen template by ID
+
+        Args:
+            template_id (string): template_id
+
+        Returns:
+            dict[str, Any]: Returns a template.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Box Doc Gen templates
+        """
+        if template_id is None:
+            raise ValueError("Missing required parameter 'template_id'.")
+        url = f"{self.base_url}/docgen_templates/{template_id}"
+        query_params = {}
+        response = self._get(url, params=query_params)
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def get_docgen_template_tags(self, template_id: str, template_version_id: Optional[str] = None, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
+        """
+        List all Box Doc Gen template tags in template
+
+        Args:
+            template_id (string): template_id
+            template_version_id (string): Id of template version. Example: '123'.
+            marker (string): Defines the position marker at which to begin returning results. This is
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+            limit (integer): The maximum number of items to return per page. Example: '1000'.
+
+        Returns:
+            dict[str, Any]: A list of document generation template tags.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Box Doc Gen templates
+        """
+        if template_id is None:
+            raise ValueError("Missing required parameter 'template_id'.")
+        url = f"{self.base_url}/docgen_templates/{template_id}/tags"
+        query_params = {k: v for k, v in [('template_version_id', template_version_id), ('marker', marker), ('limit', limit)] if v is not None}
+        response = self._get(url, params=query_params)
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def get_docgen_jobs_id_v(self, job_id: str) -> dict[str, Any]:
+        """
+        Get Box Doc Gen job by ID
+
+        Args:
+            job_id (string): job_id
+
+        Returns:
+            dict[str, Any]: Details of the Box Doc Gen job.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Box Doc Gen
+        """
+        if job_id is None:
+            raise ValueError("Missing required parameter 'job_id'.")
+        url = f"{self.base_url}/docgen_jobs/{job_id}"
+        query_params = {}
+        response = self._get(url, params=query_params)
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def get_docgen_jobs_v(self, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
+        """
+        List all Box Doc Gen jobs
+
+        Args:
+            marker (string): Defines the position marker at which to begin returning results. This is
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+            limit (integer): The maximum number of items to return per page. Example: '1000'.
+
+        Returns:
+            dict[str, Any]: A list of Box Doc Gen jobs.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Box Doc Gen
+        """
+        url = f"{self.base_url}/docgen_jobs"
+        query_params = {k: v for k, v in [('marker', marker), ('limit', limit)] if v is not None}
+        response = self._get(url, params=query_params)
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def get_template_job(self, template_id: str, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
+        """
+        Get list of all Box Doc Gen jobs for template
+
+        Args:
+            template_id (string): template_id
+            marker (string): Defines the position marker at which to begin returning results. This is
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+            limit (integer): The maximum number of items to return per page. Example: '1000'.
+
+        Returns:
+            dict[str, Any]: A single Box Doc Gen template.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Box Doc Gen templates
+        """
+        if template_id is None:
+            raise ValueError("Missing required parameter 'template_id'.")
+        url = f"{self.base_url}/docgen_template_jobs/{template_id}"
+        query_params = {k: v for k, v in [('marker', marker), ('limit', limit)] if v is not None}
+        response = self._get(url, params=query_params)
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def get_batch_job_details(self, batch_id: str, marker: Optional[str] = None, limit: Optional[int] = None) -> dict[str, Any]:
+        """
+        Get Box Doc Gen jobs by batch ID
+
+        Args:
+            batch_id (string): batch_id
+            marker (string): Defines the position marker at which to begin returning results. This is
+        used when paginating using marker-based pagination.
+
+        This requires `usemarker` to be set to `true`. Example: 'JV9IRGZmieiBasejOG9yDCRNgd2ymoZIbjsxbJMjIs3kioVii'.
+            limit (integer): The maximum number of items to return per page. Example: '1000'.
+
+        Returns:
+            dict[str, Any]: Returns a list of Box Doc Gen jobs in a Box Doc Gen batch.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Box Doc Gen
+        """
+        if batch_id is None:
+            raise ValueError("Missing required parameter 'batch_id'.")
+        url = f"{self.base_url}/docgen_batch_jobs/{batch_id}"
+        query_params = {k: v for k, v in [('marker', marker), ('limit', limit)] if v is not None}
+        response = self._get(url, params=query_params)
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def post_docgen_batches_v(self, file: Any, input_source: str, destination_folder: Any, output_type: str, document_generation_data: List[dict[str, Any]], file_version: Optional[Any] = None) -> dict[str, Any]:
+        """
+        Generate document using Box Doc Gen template
+
+        Args:
+            file (string): file
+            input_source (string): Source of input. The value has to be `api` for all the API-based document generation requests. Example: 'api'.
+            destination_folder (string): destination_folder
+            output_type (string): Type of the output file. Example: 'docx'.
+            document_generation_data (array): document_generation_data
+            file_version (string): file_version
+
+        Returns:
+            dict[str, Any]: The created Batch ID.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Box Doc Gen
+        """
+        request_body_data = None
+        request_body_data = {
+            'file': file,
+            'file_version': file_version,
+            'input_source': input_source,
+            'destination_folder': destination_folder,
+            'output_type': output_type,
+            'document_generation_data': document_generation_data,
+        }
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
+        url = f"{self.base_url}/docgen_batches"
+        query_params = {}
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def get_shield_lists_v(self) -> dict[str, Any]:
+        """
+        Get all shield lists in enterprise
+
+        Returns:
+            dict[str, Any]: Returns the list of shield list objects.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Shield lists
+        """
+        url = f"{self.base_url}/shield_lists"
+        query_params = {}
+        response = self._get(url, params=query_params)
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def post_shield_lists_v(self, name: str, content: Any, description: Optional[str] = None) -> dict[str, Any]:
+        """
+        Create shield list
+
+        Args:
+            name (string): The name of the shield list. Example: 'My Shield List'.
+            content (string): content
+            description (string): Description of Shield List: Optional. Example: 'A list of things that are shielded'.
+
+        Returns:
+            dict[str, Any]: Returns the shield list object.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Shield lists
+        """
+        request_body_data = None
+        request_body_data = {
+            'name': name,
+            'description': description,
+            'content': content,
+        }
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
+        url = f"{self.base_url}/shield_lists"
+        query_params = {}
+        response = self._post(url, data=request_body_data, params=query_params, content_type='application/json')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def get_shield_lists_id_v(self, shield_list_id: str) -> dict[str, Any]:
+        """
+        Get single shield list by shield list id
+
+        Args:
+            shield_list_id (string): shield_list_id
+
+        Returns:
+            dict[str, Any]: Returns the shield list object.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Shield lists
+        """
+        if shield_list_id is None:
+            raise ValueError("Missing required parameter 'shield_list_id'.")
+        url = f"{self.base_url}/shield_lists/{shield_list_id}"
+        query_params = {}
+        response = self._get(url, params=query_params)
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def delete_shield_lists_id_v(self, shield_list_id: str) -> Any:
+        """
+        Delete single shield list by shield list id
+
+        Args:
+            shield_list_id (string): shield_list_id
+
+        Returns:
+            Any: Shield List correctly removed. No content in response.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Shield lists
+        """
+        if shield_list_id is None:
+            raise ValueError("Missing required parameter 'shield_list_id'.")
+        url = f"{self.base_url}/shield_lists/{shield_list_id}"
+        query_params = {}
+        response = self._delete(url, params=query_params)
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
+
+    def put_shield_lists_id_v(self, shield_list_id: str, name: Optional[str] = None, description: Optional[str] = None, content: Optional[Any] = None) -> dict[str, Any]:
+        """
+        Update shield list
+
+        Args:
+            shield_list_id (string): shield_list_id
+            name (string): The name of the shield list. Example: 'My Shield List'.
+            description (string): Description of Shield List: Optional. Example: 'A list of things that are shielded'.
+            content (string): content
+
+        Returns:
+            dict[str, Any]: Returns the shield list object.
+
+        Raises:
+            HTTPError: Raised when the API request fails (e.g., non-2XX status code).
+            JSONDecodeError: Raised if the response body cannot be parsed as JSON.
+
+        Tags:
+            Shield lists
+        """
+        if shield_list_id is None:
+            raise ValueError("Missing required parameter 'shield_list_id'.")
+        request_body_data = None
+        request_body_data = {
+            'name': name,
+            'description': description,
+            'content': content,
+        }
+        request_body_data = {k: v for k, v in request_body_data.items() if v is not None}
+        url = f"{self.base_url}/shield_lists/{shield_list_id}"
+        query_params = {}
+        response = self._put(url, data=request_body_data, params=query_params, content_type='application/json')
+        response.raise_for_status()
+        if response.status_code == 204 or not response.content or not response.text.strip():
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            return None
 
     def list_tools(self):
         return [
             self.get_authorize,
+            self.post_oauth_token,
+            self.post_oauth_token_refresh,
+            self.post_oauth_revoke,
             self.get_files_id,
             self.post_files_id,
             self.put_files_id,
             self.delete_files_id,
-            self.get_files_id_app_item_associations,
+            self.list_file_associations,
             self.get_files_id_content,
+            self.post_files_id_content,
             self.options_files_content,
+            self.post_files_content,
             self.post_files_upload_sessions,
             self.post_files_id_upload_sessions,
             self.get_files_upload_sessions_id,
-            self.delete_files_upload_sessions_id,
-            self.get_files_upload_sessions_id_parts,
-            self.post_files_upload_sessions_id_commit,
+            self.put_files_upload_sessions_id,
+            self.delete_upload_session_by_id,
+            self.get_upload_session_parts,
+            self.commit_upload_session,
             self.post_files_id_copy,
             self.get_files_id_thumbnail_id,
             self.get_files_id_collaborations,
@@ -8067,14 +12203,18 @@ class BoxApp(APIApplication):
             self.put_files_id_versions_id,
             self.post_files_id_versions_current,
             self.get_files_id_metadata,
-            self.get_files_id_metadata_enterprise_security_classification_6_vmvochw_uwo,
-            self.post_files_id_metadata_enterprise_security_classification_6_vmvochw_uwo,
-            self.delete_files_id_metadata_enterprise_security_classification_6_vmvochw_uwo,
+            self.get_file_security_classification_by_id,
+            self.update_file_security_classification,
+            self.put_update_file_security_classification,
+            self.delete_file_metadata,
             self.get_files_id_metadata_id_id,
+            self.post_files_id_metadata_id_id,
+            self.put_files_id_metadata_id_id,
             self.delete_files_id_metadata_id_id,
-            self.get_files_id_metadata_global_box_skills_cards,
-            self.post_files_id_metadata_global_box_skills_cards,
-            self.delete_files_id_metadata_global_box_skills_cards,
+            self.get_global_metadata,
+            self.post_file_metadata_global_box_skills_cards,
+            self.update_file_metadata,
+            self.delete_file_global_box_skills_cards,
             self.get_files_id_watermark,
             self.put_files_id_watermark,
             self.delete_files_id_watermark,
@@ -8086,7 +12226,7 @@ class BoxApp(APIApplication):
             self.post_folders_id,
             self.put_folders_id,
             self.delete_folders_id,
-            self.get_folders_id_app_item_associations,
+            self.get_folder_app_item_associations,
             self.get_folders_id_items,
             self.post_folders,
             self.post_folders_id_copy,
@@ -8094,11 +12234,14 @@ class BoxApp(APIApplication):
             self.get_folders_id_trash,
             self.delete_folders_id_trash,
             self.get_folders_id_metadata,
-            self.get_folders_id_metadata_enterprise_security_classification_6_vmvochw_uwo,
-            self.post_folders_id_metadata_enterprise_security_classification_6_vmvochw_uwo,
-            self.delete_folders_id_metadata_enterprise_security_classification_6_vmvochw_uwo,
+            self.get_folder_security_classification,
+            self.post_folder_metadata_security_classification,
+            self.update_folder_security_classification,
+            self.delete_security_classification_by_folder_id,
             self.get_folders_id_metadata_id_id,
-            self.delete_folders_id_metadata_id_id,
+            self.post_folders_id_metadata_id_id,
+            self.put_folders_id_metadata_id_id,
+            self.delete_folder_metadata,
             self.get_folders_trash_items,
             self.get_folders_id_watermark,
             self.put_folders_id_watermark,
@@ -8107,21 +12250,23 @@ class BoxApp(APIApplication):
             self.post_folder_locks,
             self.delete_folder_locks_id,
             self.get_metadata_templates,
-            self.get_metadata_templates_enterprise_security_classification_6_vmvochw_uwo_schema,
-            self.put_metadata_templates_enterprise_security_classification_6_vmvochw_uwo_schema_add,
-            self.get_metadata_templates_id_id_schema,
-            self.delete_metadata_templates_id_id_schema,
+            self.get_security_classification_schema,
+            self.add_security_classification_schema,
+            self.update_security_classification_schema,
+            self.get_schema_template,
+            self.update_schema_template,
+            self.delete_metadata_template_schema,
             self.get_metadata_templates_id,
             self.get_metadata_templates_global,
             self.get_metadata_templates_enterprise,
             self.post_metadata_templates_schema,
-            self.post_metadata_templates_schema_classifications,
+            self.create_metadata_template_classification,
             self.get_metadata_cascade_policies,
             self.post_metadata_cascade_policies,
-            self.get_metadata_cascade_policies_id,
-            self.delete_metadata_cascade_policies_id,
-            self.post_metadata_cascade_policies_id_apply,
-            self.post_metadata_queries_execute_read,
+            self.get_metadata_cascade_policy_by_id,
+            self.delete_metadata_cascade_policy,
+            self.apply_metadata_cascade_policy_by_id,
+            self.execute_metadata_query,
             self.get_comments_id,
             self.put_comments_id,
             self.delete_comments_id,
@@ -8144,13 +12289,13 @@ class BoxApp(APIApplication):
             self.get_shared_items,
             self.get_files_id_get_shared_link,
             self.put_files_id_add_shared_link,
-            self.put_files_id_update_shared_link,
-            self.put_files_id_remove_shared_link,
+            self.update_file_shared_link,
+            self.remove_shared_link_by_id,
             self.get_shared_items_folders,
             self.get_folders_id_get_shared_link,
             self.put_folders_id_add_shared_link,
-            self.put_folders_id_update_shared_link,
-            self.put_folders_id_remove_shared_link,
+            self.update_shared_linkfolder,
+            self.remove_shared_link_by_folder_id,
             self.post_web_links,
             self.get_web_links_id,
             self.post_web_links_id,
@@ -8159,10 +12304,10 @@ class BoxApp(APIApplication):
             self.get_web_links_id_trash,
             self.delete_web_links_id_trash,
             self.get_shared_items_web_links,
-            self.get_web_links_id_get_shared_link,
-            self.put_web_links_id_add_shared_link,
-            self.put_web_links_id_update_shared_link,
-            self.put_web_links_id_remove_shared_link,
+            self.get_shared_link_by_id,
+            self.update_web_link_shared_link,
+            self.update_shared_link,
+            self.remove_shared_link_by_web_link_id,
             self.get_shared_items_app_items,
             self.get_users,
             self.post_users,
@@ -8172,11 +12317,12 @@ class BoxApp(APIApplication):
             self.put_users_id,
             self.delete_users_id,
             self.get_users_id_avatar,
+            self.post_users_id_avatar,
             self.delete_users_id_avatar,
-            self.put_users_id_folders_0,
+            self.put_users_id_folders,
             self.get_users_id_email_aliases,
             self.post_users_id_email_aliases,
-            self.delete_users_id_email_aliases_id,
+            self.delete_email_alias_by_id,
             self.get_users_id_memberships,
             self.post_invites,
             self.get_invites_id,
@@ -8209,72 +12355,72 @@ class BoxApp(APIApplication):
             self.get_retention_policies_id,
             self.put_retention_policies_id,
             self.delete_retention_policies_id,
-            self.get_retention_policies_id_assignments,
-            self.post_retention_policy_assignments,
-            self.get_retention_policy_assignments_id,
-            self.delete_retention_policy_assignments_id,
-            self.get_retention_policy_assignments_id_files_under_retention,
-            self.get_retention_policy_assignments_id_file_versions_under_retention,
+            self.get_retention_policy_assignments,
+            self.create_retention_policy_assignment,
+            self.get_retention_policy_assignment_by_id,
+            self.delete_retention_policy_assignment_by_id,
+            self.get_files_under_retention,
+            self.get_retention_policy_assignment_file_versions,
             self.get_legal_hold_policies,
             self.post_legal_hold_policies,
             self.get_legal_hold_policies_id,
             self.put_legal_hold_policies_id,
             self.delete_legal_hold_policies_id,
             self.get_legal_hold_policy_assignments,
-            self.post_legal_hold_policy_assignments,
-            self.get_legal_hold_policy_assignments_id,
-            self.delete_legal_hold_policy_assignments_id,
-            self.get_legal_hold_policy_assignments_id_files_on_hold,
+            self.assign_legal_hold_policy,
+            self.get_legal_hold_policy_assignment,
+            self.delete_legal_hold_assignment,
+            self.get_files_on_hold_by_legl_hld_polcy_asgnmt_id,
             self.get_file_version_retentions,
-            self.get_legal_hold_policy_assignments_id_file_versions_on_hold,
+            self.get_legal_hold_file_versions_on_hold,
             self.get_file_version_retentions_id,
-            self.get_file_version_legal_holds_id,
+            self.get_legal_hold,
             self.get_file_version_legal_holds,
-            self.get_shield_information_barriers_id,
-            self.post_shield_information_barriers_change_status,
+            self.get_shield_information_barrier_by_id,
+            self.change_shield_status,
             self.get_shield_information_barriers,
-            self.post_shield_information_barriers,
+            self.create_shield_barriers,
             self.get_shield_information_barrier_reports,
-            self.post_shield_information_barrier_reports,
-            self.get_shield_information_barrier_reports_id,
-            self.get_shield_information_barrier_segments_id,
-            self.delete_shield_information_barrier_segments_id,
-            self.put_shield_information_barrier_segments_id,
-            self.get_shield_information_barrier_segments,
-            self.post_shield_information_barrier_segments,
-            self.get_shield_information_barrier_segment_members_id,
-            self.delete_shield_information_barrier_segment_members_id,
-            self.get_shield_information_barrier_segment_members,
-            self.post_shield_information_barrier_segment_members,
-            self.get_shield_information_barrier_segment_restrictions_id,
-            self.delete_shield_information_barrier_segment_restrictions_id,
-            self.get_shield_information_barrier_segment_restrictions,
-            self.post_shield_information_barrier_segment_restrictions,
+            self.generate_shield_report,
+            self.get_shield_report_by_id,
+            self.get_shield_segment_by_id,
+            self.delete_shield_inft_barrier_sgmt_by_id,
+            self.update_shield_barrier_segment,
+            self.get_shield_segments,
+            self.create_shield_barrier_segments,
+            self.get_shield_infmt_barrier_sgmnt_member_by_id,
+            self.delete_shield_member,
+            self.get_shield_infmt_barrier_sgmnt_members,
+            self.add_shield_members,
+            self.get_shield_barrier_segment_restriction_by_id,
+            self.delete_shield_restriction,
+            self.get_shield_infmt_barrier_sgmnt_restrictions,
+            self.create_shield_restrictions,
             self.get_device_pinners_id,
             self.delete_device_pinners_id,
-            self.get_enterprises_id_device_pinners,
+            self.list_device_pins,
             self.get_terms_of_services,
             self.post_terms_of_services,
             self.get_terms_of_services_id,
             self.put_terms_of_services_id,
-            self.get_terms_of_service_user_statuses,
-            self.post_terms_of_service_user_statuses,
-            self.put_terms_of_service_user_statuses_id,
-            self.get_collaboration_whitelist_entries,
-            self.post_collaboration_whitelist_entries,
-            self.get_collaboration_whitelist_entries_id,
-            self.delete_collaboration_whitelist_entries_id,
-            self.get_collaboration_whitelist_exempt_targets,
-            self.post_collaboration_whitelist_exempt_targets,
-            self.get_collaboration_whitelist_exempt_targets_id,
-            self.delete_collaboration_whitelist_exempt_targets_id,
+            self.get_tos_user_statuses,
+            self.create_terms_of_service_statuses,
+            self.update_terms_of_service_user_status_by_id,
+            self.list_collaboration_whitelist_entries,
+            self.create_collaboration_whitelist_entry,
+            self.get_whitelist_entry_by_id,
+            self.delete_collaboration_whitelist_entry_by_id,
+            self.list_whitelist_targets,
+            self.create_collaboration_whitelist_exempt_target,
+            self.get_exempt_target_by_id,
+            self.delete_collab_whitelist_exempt_target_by_id,
             self.get_storage_policies,
             self.get_storage_policies_id,
             self.get_storage_policy_assignments,
-            self.post_storage_policy_assignments,
-            self.get_storage_policy_assignments_id,
-            self.put_storage_policy_assignments_id,
-            self.delete_storage_policy_assignments_id,
+            self.create_storage_policy_assignment,
+            self.get_storage_policy_assignment,
+            self.update_storage_policy_assignment,
+            self.delete_storage_policy_assignment,
             self.post_zip_downloads,
             self.get_zip_downloads_id_content,
             self.get_zip_downloads_id_status,
@@ -8288,13 +12434,13 @@ class BoxApp(APIApplication):
             self.get_sign_templates,
             self.get_sign_templates_id,
             self.get_integration_mappings_slack,
-            self.post_integration_mappings_slack,
-            self.put_integration_mappings_slack_id,
-            self.delete_integration_mappings_slack_id,
+            self.create_slack_mapping,
+            self.update_slack_integration_mapping_by_id,
+            self.delete_slack_mapping_by_id,
             self.get_integration_mappings_teams,
-            self.post_integration_mappings_teams,
-            self.put_integration_mappings_teams_id,
-            self.delete_integration_mappings_teams_id,
+            self.create_integration_mapping_team,
+            self.update_integration_mapping_team,
+            self.delete_integration_mapping_by_id,
             self.post_ai_ask,
             self.post_ai_text_gen,
             self.get_ai_agent_default,
@@ -8304,5 +12450,20 @@ class BoxApp(APIApplication):
             self.post_ai_agents,
             self.put_ai_agents_id,
             self.get_ai_agents_id,
-            self.delete_ai_agents_id
+            self.delete_ai_agents_id,
+            self.post_docgen_templates_v,
+            self.get_docgen_templates_v,
+            self.delete_template_by_id,
+            self.get_docgen_template_by_id,
+            self.get_docgen_template_tags,
+            self.get_docgen_jobs_id_v,
+            self.get_docgen_jobs_v,
+            self.get_template_job,
+            self.get_batch_job_details,
+            self.post_docgen_batches_v,
+            self.get_shield_lists_v,
+            self.post_shield_lists_v,
+            self.get_shield_lists_id_v,
+            self.delete_shield_lists_id_v,
+            self.put_shield_lists_id_v
         ]
